@@ -1,0 +1,30 @@
+variables:
+  MAVEN_WORK_DIR: "java-test/"
+
+include:
+- project: 'secata-public/pom/shared-ci'
+  file: 'contract-java-test.yml'
+  ref: 'v.2.21.0'
+- project: 'secata-public/pom/shared-ci'
+  file: 'rust-contract.yml'
+  ref: 'v.2.21.0'
+- project: 'secata-public/pom/shared-ci'
+  file: 'jar-codequality.yml'
+  ref: 'v.2.21.0'
+
+compile-contracts:
+  extends: .cargo
+  image: registry.gitlab.com/partisia/dockerimages/rustmaven:${RUST_VERSION}
+  script:
+    - !reference [.functions, cargo-partisia-contract]
+    - !reference [.scripts, build]
+  stage: build
+  artifacts:
+    paths:
+      - target/wasm32-unknown-unknown/release/*.abi
+      - target/wasm32-unknown-unknown/release/*.wasm
+      - target/wasm32-unknown-unknown/release/*.zkwa
+
+contract-java-test:
+  variables:
+    MAVEN_WORK_DIR: "./"
