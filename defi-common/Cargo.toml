@@ -1,0 +1,30 @@
+[package]
+name = "defi_common"
+version = "4.26.0"
+description = "Common functionality for partisia DeFi contracts."
+homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi/defi-common"
+repository = "https://gitlab.com/partisiablockchain/language/contracts/defi/defi-common"
+documentation = "https://gitlab.com/partisiablockchain/language/contracts/defi/defi-common"
+readme = "README.md"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ['rlib', 'cdylib']
+
+[dependencies]
+pbc_contract_common.workspace = true
+pbc_traits.workspace = true
+pbc_lib.workspace = true
+read_write_rpc_derive.workspace = true
+read_write_state_derive.workspace = true
+create_type_spec_derive.workspace = true
+pbc_contract_codegen.workspace = true
+
+[dev-dependencies]
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+proptest = "1.0.0"
+
+[features]
+abi = ["pbc_contract_common/abi", "pbc_contract_codegen/abi", "pbc_traits/abi", "create_type_spec_derive/abi"]
