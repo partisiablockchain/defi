@@ -1,15 +1,16 @@
-package defi;
+package defi.properties;
 
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwap;
 import com.partisiablockchain.language.abicodegen.Token;
+import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
 import java.math.BigInteger;
 import java.util.List;
 import org.assertj.core.api.Assertions;
 
-/** {@link LiquiditySwap} testing. */
-public final class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
+/** Testing of {@link LiquiditySwap} using a relatively realistic ETH-USDC swap pair. */
+public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
 
   private static final int DECIMALS_ETH = 18;
   private static final int DECIMALS_USDC = 3;
@@ -31,21 +32,23 @@ public final class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
 
   private static final short SWAP_FEE_PER_MILLE = (short) 0;
 
-  private BlockchainAddress creatorAddress;
-  private BlockchainAddress account2;
+  public BlockchainAddress account2;
+  public BlockchainAddress contractEth;
+  public BlockchainAddress contractUsdCoin;
 
-  private BlockchainAddress contractEth;
-  private BlockchainAddress contractUsdCoin;
-  private BlockchainAddress contractSwap;
+  protected final ContractBytes contractBytesToken;
+  protected final ContractBytes contractBytesSwap;
 
-  @Override
-  protected BlockchainAddress creatorAddress() {
-    return creatorAddress;
-  }
-
-  @Override
-  protected BlockchainAddress swapContractAddress() {
-    return contractSwap;
+  /**
+   * Initialize the test class.
+   *
+   * @param contractBytesToken Contract bytes to initialize the {@link Token} contract.
+   * @param contractBytesSwap Contract bytes to initialize the {@link LiquiditySwap} contract.
+   */
+  public LiquiditySwapEthUsdcTest(
+      final ContractBytes contractBytesToken, final ContractBytes contractBytesSwap) {
+    this.contractBytesToken = contractBytesToken;
+    this.contractBytesSwap = contractBytesSwap;
   }
 
   @ContractTest
@@ -56,17 +59,16 @@ public final class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     // Setup tokens
     final byte[] initRpcEth =
         Token.initialize("Ethereum Ether", "ETH", (byte) DECIMALS_ETH, TOTAL_SUPPLY_ETH);
-    contractEth = blockchain.deployContract(creatorAddress, CONTRACT_BYTES_TOKEN, initRpcEth);
+    contractEth = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcEth);
 
     final byte[] initRpcUsdCoin =
         Token.initialize("USD Coin", "USDC", (byte) DECIMALS_USDC, TOTAL_SUPPLY_USDC);
-    contractUsdCoin =
-        blockchain.deployContract(creatorAddress, CONTRACT_BYTES_TOKEN, initRpcUsdCoin);
+    contractUsdCoin = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcUsdCoin);
 
     // Setup swap
     final byte[] initRpcSwap =
         LiquiditySwap.initialize(contractUsdCoin, contractEth, SWAP_FEE_PER_MILLE);
-    contractSwap = blockchain.deployContract(creatorAddress, CONTRACT_BYTES_SWAP, initRpcSwap);
+    swapContractAddress = blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwap);
 
     // Deposit setup
     depositAmount(List.of(creatorAddress), contractEth, INITIAL_LIQUIDITY_ETH);
@@ -75,14 +77,14 @@ public final class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     // Provide initial liquidity
     blockchain.sendAction(
         creatorAddress,
-        contractSwap,
+        swapContractAddress,
         LiquiditySwap.provideInitialLiquidity(INITIAL_LIQUIDITY_USDC, INITIAL_LIQUIDITY_ETH));
 
     // Validate
     validateBalance(creatorAddress, contractEth, BigInteger.ZERO);
     validateBalance(creatorAddress, contractUsdCoin, BigInteger.ZERO);
-    validateBalance(contractSwap, contractEth, INITIAL_LIQUIDITY_ETH);
-    validateBalance(contractSwap, contractUsdCoin, INITIAL_LIQUIDITY_USDC);
+    validateBalance(swapContractAddress, contractEth, INITIAL_LIQUIDITY_ETH);
+    validateBalance(swapContractAddress, contractUsdCoin, INITIAL_LIQUIDITY_USDC);
     validateExchangeRate(DECIMALS_ETH - DECIMALS_USDC, INITIAL_RATE_ETH_USDC);
   }
 

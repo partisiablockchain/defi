@@ -122,36 +122,28 @@ pub struct TokenBalances {
 
 impl TokenBalances {
     /// Creates new token balances structure from the given token addresses.
+    ///
+    /// Checks whether the state is valid, if not it will return an error reason.
     pub fn new(
         token_lp_address: Address,
         token_a_address: Address,
         token_b_address: Address,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, &'static str> {
+        if token_a_address.address_type == AddressType::Account {
+            return Result::Err("Token address A must be a contract address");
+        }
+        if token_b_address.address_type == AddressType::Account {
+            return Result::Err("Token address B must be a contract address");
+        }
+        if token_a_address == token_b_address {
+            return Result::Err("Tokens A and B must not be the same contract");
+        }
+        Result::Ok(Self {
             token_lp_address,
             token_a_address,
             token_b_address,
             balances: SortedVecMap::new(),
-        }
-    }
-
-    /// Checks whether the state is valid.
-    pub fn is_valid(&self) -> bool {
-        self.is_valid_or_reason().is_ok()
-    }
-
-    /// Checks whether the state is valid, if not it will return an error reason.
-    pub fn is_valid_or_reason(&self) -> Result<(), &'static str> {
-        if self.token_a_address.address_type == AddressType::Account {
-            return Result::Err("Token address A must be a contract address");
-        }
-        if self.token_b_address.address_type == AddressType::Account {
-            return Result::Err("Token address B must be a contract address");
-        }
-        if self.token_a_address == self.token_b_address {
-            return Result::Err("Tokens A and B must not be the same contract");
-        }
-        Result::Ok(())
+        })
     }
 
     /// Adds tokens to the `balances` map of the contract. <br>

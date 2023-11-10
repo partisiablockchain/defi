@@ -1,13 +1,13 @@
 [package]
 name = "dex-swap-factory"
-version = "4.26.0"
-description = "Example swap factory and directory for Partisia Blockchain"
-homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi/dex-swap-factory"
-repository = "https://gitlab.com/partisiablockchain/language/contracts/defi/dex-swap-factory"
-documentation = "https://gitlab.com/partisiablockchain/language/contracts/defi/dex-swap-factory"
 readme = "README.md"
-edition = "2021"
-license = "MIT"
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 path = "src/lib.rs"

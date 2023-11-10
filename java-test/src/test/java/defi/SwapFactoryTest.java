@@ -10,6 +10,7 @@ import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
+import defi.properties.LiquiditySwapBaseTest;
 import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -47,14 +48,11 @@ public final class SwapFactoryTest extends JunitContractTest {
     swapper = blockchain.newAccount(3);
 
     // Setup tokens
-    token1 =
-        TokenTest.deployTokenContract(
-            blockchain, creator, "Ethereum", "ETH", (byte) 18, TOTAL_SUPPLY);
-    token2 =
-        TokenTest.deployTokenContract(
-            blockchain, creator, "USD Coin", "USDC", (byte) 18, TOTAL_SUPPLY);
-    System.out.println("A: " + token1);
-    System.out.println("B: " + token2);
+    final byte[] initRpcEth = Token.initialize("Ethereum Ether", "ETH", (byte) 18, TOTAL_SUPPLY);
+    token1 = blockchain.deployContract(creator, TokenContractTest.CONTRACT_BYTES, initRpcEth);
+
+    final byte[] initRpcUsdCoin = Token.initialize("USD Coin", "USDC", (byte) 18, TOTAL_SUPPLY);
+    token2 = blockchain.deployContract(creator, TokenContractTest.CONTRACT_BYTES, initRpcUsdCoin);
 
     // Move some tokens to accounts
     transfer(token1, creator, liquidityProvider, INITIAL_ACCOUNT_TOKENS);
@@ -371,7 +369,7 @@ public final class SwapFactoryTest extends JunitContractTest {
     final LiquiditySwap.LiquiditySwapContractState state =
         LiquiditySwap.LiquiditySwapContractState.deserialize(
             blockchain.getContractState(swapAddress));
-    return LiquiditySwapTest.swapDepositBalance(state, owner, tokenAddress);
+    return LiquiditySwapBaseTest.swapDepositBalance(state, owner, tokenAddress);
   }
 
   private BigInteger tokenBalance(BlockchainAddress owner, BlockchainAddress tokenAddress) {

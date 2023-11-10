@@ -1,4 +1,4 @@
-package defi;
+package defi.properties;
 
 import static java.util.Map.entry;
 
@@ -17,24 +17,13 @@ import com.partisiablockchain.language.junit.exceptions.SecretInputFailureExcept
 import com.partisiablockchain.language.testenvironment.zk.node.task.PendingInputId;
 import com.secata.stream.CompactBitArray;
 import java.math.BigInteger;
-import java.nio.file.Path;
 import java.util.Map;
 import org.assertj.core.api.Assertions;
 
-/** {@link ZkLiquiditySwap} testing. */
-public final class ZkLiquiditySwapTest extends JunitContractTest {
-
-  private static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/zk_liquidity_swap.zkwa"),
-          Path.of("../target/wasm32-unknown-unknown/release/zk_liquidity_swap.abi"),
-          Path.of("../target/wasm32-unknown-unknown/release/zk_liquidity_swap_runner"));
+/** Testing of {@link ZkLiquiditySwap}. */
+public abstract class LiquiditySwapZkTest extends JunitContractTest {
 
   private static final BigInteger ZERO = BigInteger.ZERO;
-
-  private static final ZkLiquiditySwap.TokenBalance ZERO_BALANCE =
-      new ZkLiquiditySwap.TokenBalance(ZERO, ZERO, ZERO);
-
   private static final BigInteger TOTAL_SUPPLY_A = BigInteger.ONE.shiftLeft(100);
   private static final BigInteger TOTAL_SUPPLY_B = BigInteger.ONE.shiftLeft(90);
   private static final BigInteger INITIAL_LIQUIDITY_A = BigInteger.ONE.shiftLeft(60);
@@ -45,13 +34,28 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
   private static final BigInteger NON_OWNER_TOKEN_AMOUNT_A = BigInteger.ONE.shiftLeft(15);
   private static final BigInteger NON_OWNER_TOKEN_AMOUNT_B = BigInteger.ONE.shiftLeft(14);
 
-  private BlockchainAddress contractOwnerAddress;
-  private BlockchainAddress nonOwnerAddress1;
-  private BlockchainAddress nonOwnerAddress2;
-  private BlockchainAddress swapContractAddress;
+  public BlockchainAddress contractOwnerAddress;
+  public BlockchainAddress nonOwnerAddress1;
+  public BlockchainAddress nonOwnerAddress2;
+  public BlockchainAddress swapContractAddress;
 
-  private BlockchainAddress contractTokenA;
-  private BlockchainAddress contractTokenB;
+  public BlockchainAddress contractTokenA;
+  public BlockchainAddress contractTokenB;
+
+  protected final ContractBytes contractBytesToken;
+  protected final ContractBytes contractBytesSwap;
+
+  /**
+   * Initialize the test class.
+   *
+   * @param contractBytesToken Contract bytes to initialize the {@link Token} contract.
+   * @param contractBytesSwap Contract bytes to initialize the {@link ZkLiquiditySwap} contract.
+   */
+  public LiquiditySwapZkTest(
+      final ContractBytes contractBytesToken, final ContractBytes contractBytesSwap) {
+    this.contractBytesToken = contractBytesToken;
+    this.contractBytesSwap = contractBytesSwap;
+  }
 
   /** Test deployment and initialization of contract. */
   @ContractTest
@@ -62,12 +66,10 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
 
     // Setup tokens.
     byte[] initRpcA = Token.initialize("Token A", "A", (byte) 8, TOTAL_SUPPLY_A);
-    contractTokenA =
-        blockchain.deployContract(contractOwnerAddress, TokenTest.CONTRACT_BYTES, initRpcA);
+    contractTokenA = blockchain.deployContract(contractOwnerAddress, contractBytesToken, initRpcA);
 
     byte[] initRpcB = Token.initialize("Token B", "B", (byte) 8, TOTAL_SUPPLY_B);
-    contractTokenB =
-        blockchain.deployContract(contractOwnerAddress, TokenTest.CONTRACT_BYTES, initRpcB);
+    contractTokenB = blockchain.deployContract(contractOwnerAddress, contractBytesToken, initRpcB);
 
     // Give our non owners some tokens to work with.
     blockchain.sendAction(
@@ -88,26 +90,25 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
         Token.transfer(nonOwnerAddress2, NON_OWNER_TOKEN_AMOUNT_B));
 
     // Setup swap contract.
-    byte[] initRpcSwap = ZkLiquiditySwap.initialize(contractTokenA, contractTokenB);
+    byte[] initRpcSwap = ZkLiquiditySwap.initialize(contractTokenA, contractTokenB, (short) 0);
     swapContractAddress =
-        blockchain.deployZkContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwap);
+        blockchain.deployZkContract(contractOwnerAddress, contractBytesSwap, initRpcSwap);
 
     ZkLiquiditySwap.ContractState state = getSwapState();
 
     // Check default values of initial contract state
     Assertions.assertThat(state).isNotNull();
     Assertions.assertThat(state.contractOwner()).isEqualTo(contractOwnerAddress);
-    Assertions.assertThat(state.tokenPoolAddress()).isEqualTo(swapContractAddress);
+    Assertions.assertThat(state.liquidityPoolAddress()).isEqualTo(swapContractAddress);
     Assertions.assertThat(state.swapConstant()).isEqualTo(0);
-    Assertions.assertThat(state.isClosed()).isTrue();
+    assertHasLiquidity(state, false);
     Assertions.assertThat(state.worklist()).isEmpty();
-    Assertions.assertThat(state.unusedVariables()).isEmpty();
 
     // Check initial value of balances in state.
-    ZkLiquiditySwap.TokenBalances b = state.balances();
+    ZkLiquiditySwap.TokenBalances b = state.tokenBalances();
     Assertions.assertThat(b.tokenAAddress()).isEqualTo(contractTokenA);
     Assertions.assertThat(b.tokenBAddress()).isEqualTo(contractTokenB);
-    Assertions.assertThat(b.balances()).containsExactly(entry(swapContractAddress, ZERO_BALANCE));
+    Assertions.assertThat(b.balances()).isEmpty();
   }
 
   /** Tests that contract owner can deposit, and a new account is created. */
@@ -124,13 +125,10 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
             contractOwnerAddress, createBalance(INITIAL_LIQUIDITY_A, INITIAL_LIQUIDITY_B));
   }
 
-  /** Test that non-owners cannot deposit before pool initialization. */
+  /** Test that non-owners can deposit before pool initialization. */
   @ContractTest(previous = "contractInit")
   void initialDepositFromNonOwner() {
-    Assertions.assertThatThrownBy(
-            () -> depositIntoSwap(nonOwnerAddress1, contractTokenA, INITIAL_LIQUIDITY_A))
-        .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("The contract is closed");
+    depositIntoSwap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A);
   }
 
   /** Test liquidity initialization by contract owner. */
@@ -140,11 +138,7 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
     blockchain.sendAction(
         contractOwnerAddress,
         swapContractAddress,
-        ZkLiquiditySwap.provideLiquidity(contractTokenA, INITIAL_LIQUIDITY_A));
-    blockchain.sendAction(
-        contractOwnerAddress,
-        swapContractAddress,
-        ZkLiquiditySwap.provideLiquidity(contractTokenB, INITIAL_LIQUIDITY_B));
+        ZkLiquiditySwap.provideInitialLiquidity(INITIAL_LIQUIDITY_A, INITIAL_LIQUIDITY_B));
 
     // Tokens have been moved from owner to liquidity pool.
     Assertions.assertThat(getDepositBalances())
@@ -154,42 +148,38 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
                 new ZkLiquiditySwap.TokenBalance(INITIAL_LIQUIDITY_A, INITIAL_LIQUIDITY_B, ZERO)));
 
     // Contract state is now open.
-    Assertions.assertThat(getSwapState().isClosed()).isFalse();
+    assertHasLiquidity(getSwapState(), true);
   }
 
   /** Tests liquidity initialization of only 1 pool. */
   @ContractTest(previous = "initialDepositFromOwner")
   void initializeOnePool() {
-    // Initialize liquidity of token A.
-    blockchain.sendAction(
-        contractOwnerAddress,
-        swapContractAddress,
-        ZkLiquiditySwap.provideLiquidity(contractTokenA, INITIAL_LIQUIDITY_A));
-
-    // A Tokens have been moved from owner to liquidity pool.
-    Assertions.assertThat(getDepositBalances())
-        .containsExactlyInAnyOrderEntriesOf(
-            Map.of(
-                swapContractAddress,
-                new ZkLiquiditySwap.TokenBalance(INITIAL_LIQUIDITY_A, ZERO, ZERO),
-                contractOwnerAddress,
-                new ZkLiquiditySwap.TokenBalance(ZERO, INITIAL_LIQUIDITY_B, ZERO)));
+    // Cannot initialize only one contract pool
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    contractOwnerAddress,
+                    swapContractAddress,
+                    ZkLiquiditySwap.provideInitialLiquidity(INITIAL_LIQUIDITY_A, BigInteger.ZERO)))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining(
+            "Contract pools should have been initialized after calling provide_initial_liquidity");
 
     // Contract state is still closed.
-    Assertions.assertThat(getSwapState().isClosed()).isTrue();
+    assertHasLiquidity(getSwapState(), false);
   }
 
   /** Contract owner can close the pool. */
   @ContractTest(previous = "initializePool")
   void closePools() {
     // Initial pools are open.
-    Assertions.assertThat(getSwapState().isClosed()).isFalse();
+    assertHasLiquidity(getSwapState(), true);
 
     // Close pools.
     blockchain.sendAction(contractOwnerAddress, swapContractAddress, ZkLiquiditySwap.closePools());
 
     // Pools are closed, and liquidity is returned to owner.
-    Assertions.assertThat(getSwapState().isClosed()).isTrue();
+    assertHasLiquidity(getSwapState(), false);
 
     Assertions.assertThat(getDepositBalances())
         .containsEntry(
@@ -475,6 +465,7 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
   @ContractTest(previous = "initializePool")
   void withdrawTooMuchWhileInQueue() {
     depositIntoSwap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A);
+    depositIntoSwap(nonOwnerAddress2, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A);
 
     zkNodes.stop();
 
@@ -491,8 +482,15 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO),
             false);
+    PendingInputId swapId3 =
+        swap(
+            nonOwnerAddress2,
+            contractTokenA,
+            NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO),
+            false);
     zkNodes.confirmInput(swapId1);
     zkNodes.confirmInput(swapId2);
+    zkNodes.confirmInput(swapId3);
 
     final BigInteger receivingB =
         calculateReceivingAmount(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO));
@@ -513,6 +511,9 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
                 NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO).subtract(BigInteger.ONE),
                 receivingB,
                 ZERO));
+
+    // Perform last swap
+    performSwapsInQueue(1);
   }
 
   /** Closing the pool will stop queued swaps. */
@@ -579,7 +580,14 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
     blockchain.sendAction(contractOwnerAddress, swapContractAddress, ZkLiquiditySwap.closePools());
 
     // Try to perform remaining swaps. They will fail, as the pools are empty.
-    performSwapsInQueue(4);
+    Assertions.assertThatCode(() -> performSwapsInQueue(1))
+        .hasMessageContaining("The contract is closed");
+    Assertions.assertThatCode(() -> performSwapsInQueue(1))
+        .hasMessageContaining("The contract is closed");
+    Assertions.assertThatCode(() -> performSwapsInQueue(1))
+        .hasMessageContaining("The contract is closed");
+    Assertions.assertThatCode(() -> performSwapsInQueue(1))
+        .hasMessageContaining("The contract is closed");
 
     // Only the first two swaps have been performed, so state is the same.
     Assertions.assertThat(getDepositBalances()).containsAllEntriesOf(afterSwapState);
@@ -638,9 +646,18 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
         .containsEntry(nonOwnerAddress1, NON_OWNER_TOKEN_AMOUNT_A);
   }
 
-  private CompactBitArray createSecretInput(BigInteger amount, boolean direction) {
+  private ZkLiquiditySwap.ContractState getSwapState() {
+    return ZkLiquiditySwap.ContractState.deserialize(
+        blockchain.getContractState(swapContractAddress));
+  }
+
+  private Token.TokenState getTokenState(BlockchainAddress tokenAddress) {
+    return Token.TokenState.deserialize(blockchain.getContractState(tokenAddress));
+  }
+
+  private CompactBitArray swapSecretSharedInput(BigInteger amount, boolean direction) {
     // Hack since CodeGen for ZkFunctions not yet supported.
-    FileAbi fileAbi = new AbiParser(CONTRACT_BYTES.abi()).parseAbi();
+    FileAbi fileAbi = new AbiParser(contractBytesSwap.abi()).parseAbi();
     final ZkInputBuilder builder = ZkInputBuilder.createZkInputBuilder("swap", fileAbi.contract());
 
     byte bool = direction ? (byte) 0x01 : (byte) 0x00;
@@ -650,20 +667,11 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
     return builder.getBits();
   }
 
-  private byte[] getAdditionalSwapRpc(boolean onlyIfAtFront) {
-    FileAbi fileAbi = new AbiParser(CONTRACT_BYTES.abi()).parseAbi();
+  private byte[] swapPublicRpc(boolean onlyIfAtFront) {
+    FileAbi fileAbi = new AbiParser(contractBytesSwap.abi()).parseAbi();
     final FnRpcBuilder builder = new FnRpcBuilder("swap", fileAbi.contract());
     builder.addBool(onlyIfAtFront);
     return builder.getBytes();
-  }
-
-  private ZkLiquiditySwap.ContractState getSwapState() {
-    return ZkLiquiditySwap.ContractState.deserialize(
-        blockchain.getContractState(swapContractAddress));
-  }
-
-  private Token.TokenState getTokenState(BlockchainAddress tokenAddress) {
-    return Token.TokenState.deserialize(blockchain.getContractState(tokenAddress));
   }
 
   private PendingInputId swap(
@@ -675,8 +683,8 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
     return blockchain.sendSecretInput(
         swapContractAddress,
         swapper,
-        createSecretInput(amount, direction),
-        getAdditionalSwapRpc(onlyIfAtFront));
+        swapSecretSharedInput(amount, direction),
+        swapPublicRpc(onlyIfAtFront));
   }
 
   private BigInteger calculateReceivingAmount(BlockchainAddress fromToken, BigInteger amount) {
@@ -695,8 +703,7 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
   }
 
   private BigInteger getPoolAmountForToken(BlockchainAddress token) {
-    ZkLiquiditySwap.ContractState state = getSwapState();
-    ZkLiquiditySwap.TokenBalance b = state.balances().balances().get(swapContractAddress);
+    ZkLiquiditySwap.TokenBalance b = getDepositBalances().get(swapContractAddress);
     return token.equals(contractTokenA) ? b.aTokens() : b.bTokens();
   }
 
@@ -713,15 +720,25 @@ public final class ZkLiquiditySwapTest extends JunitContractTest {
         withdrawee, swapContractAddress, ZkLiquiditySwap.withdraw(tokenAddress, amount));
   }
 
-  private void performSwapsInQueue(int swapAmount) {
-    for (int i = 0; i < swapAmount; ++i) {
-      zkNodes.zkCompute(swapContractAddress);
+  private void performSwapsInQueue(int numSwapsToExecute) {
+    for (int i = 0; i < numSwapsToExecute; ++i) {
       zkNodes.openVariable(zkNodes.getPendingOpens(swapContractAddress).get(0));
     }
   }
 
+  private void assertHasLiquidity(ZkLiquiditySwap.ContractState state, boolean expected) {
+    final var liquidityPoolBalances =
+        state.tokenBalances().balances().get(state.liquidityPoolAddress());
+    if (expected) {
+      Assertions.assertThat(liquidityPoolBalances.aTokens()).as("Token A liquidity").isPositive();
+      Assertions.assertThat(liquidityPoolBalances.bTokens()).as("Token B liquidity").isPositive();
+    } else {
+      Assertions.assertThat(liquidityPoolBalances).as("Token liquidity").isNull();
+    }
+  }
+
   private Map<BlockchainAddress, ZkLiquiditySwap.TokenBalance> getDepositBalances() {
-    return getSwapState().balances().balances();
+    return getSwapState().tokenBalances().balances();
   }
 
   private ZkLiquiditySwap.TokenBalance createBalance(BigInteger amountA, BigInteger amountB) {

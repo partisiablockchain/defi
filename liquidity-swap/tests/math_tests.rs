@@ -1,4 +1,4 @@
-use super::*;
+use liquidity_swap::*;
 use proptest::prelude::*;
 
 #[test]

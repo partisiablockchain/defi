@@ -1,12 +1,10 @@
-package defi;
+package defi.properties;
 
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwap;
 import com.partisiablockchain.language.abicodegen.Token;
-import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import java.math.BigInteger;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.assertj.core.api.Assertions;
@@ -14,17 +12,8 @@ import org.assertj.core.api.Assertions;
 /** {@link LiquiditySwap} testing. */
 public abstract class LiquiditySwapBaseTest extends JunitContractTest {
 
-  protected static final ContractBytes CONTRACT_BYTES_TOKEN = TokenTest.CONTRACT_BYTES;
-
-  protected static final ContractBytes CONTRACT_BYTES_SWAP =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/liquidity_swap.wasm"),
-          Path.of("../target/wasm32-unknown-unknown/release/liquidity_swap.abi"),
-          Path.of("../target/wasm32-unknown-unknown/release/liquidity_swap_runner"));
-
-  protected abstract BlockchainAddress creatorAddress();
-
-  protected abstract BlockchainAddress swapContractAddress();
+  public BlockchainAddress creatorAddress;
+  public BlockchainAddress swapContractAddress;
 
   /** State accessor for token balances. */
   protected static LiquiditySwap.TokenBalance getSwapDepositBalances(
@@ -40,7 +29,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
    * @param tokenAddress the token to get balance for.
    * @return the balance for the given token.
    */
-  private static BigInteger swapDepositBalance(
+  public static BigInteger swapDepositBalance(
       LiquiditySwap.LiquiditySwapContractState state,
       LiquiditySwap.TokenBalance tokenBalance,
       BlockchainAddress tokenAddress) {
@@ -82,7 +71,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
       BlockchainAddress owner, BlockchainAddress tokenAddr) {
     final LiquiditySwap.LiquiditySwapContractState state =
         LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress()));
+            blockchain.getContractState(swapContractAddress));
     return swapDepositBalance(state, owner, tokenAddr);
   }
 
@@ -133,7 +122,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   protected final void validateStateInvariants() {
     final LiquiditySwap.LiquiditySwapContractState state =
         LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress()));
+            blockchain.getContractState(swapContractAddress));
     validateStateInvariants(state);
   }
 
@@ -146,7 +135,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   protected final BigInteger exchangeRate(int precision) {
     final LiquiditySwap.LiquiditySwapContractState state =
         LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress()));
+            blockchain.getContractState(swapContractAddress));
     final var aTokens =
         swapDepositBalance(
             state, state.liquidityPoolAddress(), state.tokenBalances().tokenAAddress());
@@ -162,12 +151,12 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   protected final void depositAmount(
       List<BlockchainAddress> senders, BlockchainAddress contractToken, BigInteger amount) {
     final var transfers = senders.stream().map(s -> new Token.Transfer(s, amount)).toList();
-    blockchain.sendAction(creatorAddress(), contractToken, Token.bulkTransfer(transfers));
+    blockchain.sendAction(creatorAddress, contractToken, Token.bulkTransfer(transfers));
 
     for (final BlockchainAddress sender : senders) {
-      blockchain.sendAction(sender, contractToken, Token.approve(swapContractAddress(), amount));
+      blockchain.sendAction(sender, contractToken, Token.approve(swapContractAddress, amount));
       blockchain.sendAction(
-          sender, swapContractAddress(), LiquiditySwap.deposit(contractToken, amount));
+          sender, swapContractAddress, LiquiditySwap.deposit(contractToken, amount));
     }
   }
 
@@ -182,7 +171,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
       BigInteger amountInput,
       BigInteger amountOutputMinimum) {
     final byte[] rpc = LiquiditySwap.swap(tokenInput, amountInput, amountOutputMinimum);
-    blockchain.sendAction(swapper, swapContractAddress(), rpc);
+    blockchain.sendAction(swapper, swapContractAddress, rpc);
   }
 
   protected final void validateExchangeRate(int precision, BigInteger expectedExchangeRate) {

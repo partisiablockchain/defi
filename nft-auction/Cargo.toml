@@ -1,13 +1,13 @@
 [package]
 name = "nft-auction"
-version = "4.26.0"
-description = "Example NFT Auction contract for the Partisia Blockchain."
-homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi"
-repository = "https://gitlab.com/partisiablockchain/language/contracts/defi"
-documentation = "https://gitlab.com/partisiablockchain/language/contracts/defi"
 readme = "README.md"
-edition = "2021"
-license = "MIT"
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 path = "src/lib.rs"
