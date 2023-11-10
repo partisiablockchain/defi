@@ -1,13 +1,13 @@
 [package]
 name = "conditional-escrow-transfer"
-version = "4.26.0"
-description = "Example contract for the Partisia Blockchain."
-homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi/conditional-escrow-transfer"
-repository = "https://gitlab.com/partisiablockchain/language/contracts/defi/conditional-escrow-transfer"
-documentation = "https://gitlab.com/partisiablockchain/language/contracts/defi/conditional-escrow-transfer"
 readme = "README.md"
-edition = "2021"
-license = "MIT"
+version.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+documentation.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 crate-type = ['rlib', 'cdylib']

@@ -1,8 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-#[cfg(test)]
-mod tests;
-
 #[macro_use]
 extern crate pbc_contract_codegen;
 extern crate core;
@@ -38,14 +35,8 @@ pub struct LiquiditySwapContractState {
 }
 
 impl LiquiditySwapContractState {
-    /// Checks whether the state is valid.
-    pub fn is_valid(&self) -> bool {
-        self.is_valid_or_reason().is_ok()
-    }
-
     /// Checks whether the state is valid, if not it will return an error reason.
     pub fn is_valid_or_reason(&self) -> Result<(), &'static str> {
-        self.token_balances.is_valid_or_reason()?;
         if !ALLOWED_FEE_PER_MILLE.contains(&self.swap_fee_per_mille) {
             return Result::Err("Swap fee must be in range [0,1000]");
         }
@@ -90,14 +81,12 @@ pub fn initialize(
     token_b_address: Address,
     swap_fee_per_mille: u16,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
+    let token_balances =
+        TokenBalances::new(context.contract_address, token_a_address, token_b_address).unwrap();
     let new_state = LiquiditySwapContractState {
         liquidity_pool_address: context.contract_address,
         swap_fee_per_mille,
-        token_balances: TokenBalances::new(
-            context.contract_address,
-            token_a_address,
-            token_b_address,
-        ),
+        token_balances,
     };
 
     if let Err(msg) = new_state.is_valid_or_reason() {
@@ -454,7 +443,7 @@ pub fn provide_initial_liquidity(
 /// Determines the initial amount of liquidity tokens, or shares, representing some sensible '100%' of the contract's liquidity. <br>
 /// This implementation is derived from section 3.4 of: [Uniswap v2 whitepaper](https://uniswap.org/whitepaper.pdf). <br>
 /// It guarantees that the value of a liquidity token becomes independent of the ratio at which liquidity was initially token_in.
-fn initial_liquidity_tokens(
+pub fn initial_liquidity_tokens(
     token_a_amount: TokenAmount,
     token_b_amount: TokenAmount,
 ) -> TokenAmount {
@@ -477,7 +466,7 @@ fn initial_liquidity_tokens(
 ///
 /// # Returns
 /// The amount received after swapping. [`TokenAmount`]
-fn calculate_swap_to_amount(
+pub fn calculate_swap_to_amount(
     pool_token_in: TokenAmount,
     pool_token_out: TokenAmount,
     swap_amount_in: TokenAmount,
@@ -503,7 +492,7 @@ fn calculate_swap_to_amount(
 /// * `total_minted_liquidity` [`TokenAmount`] - The total current minted liquidity.
 /// # Returns
 /// The new A pool, B pool and minted liquidity values ([`TokenAmount`], [`TokenAmount`], [`TokenAmount`])
-fn calculate_equivalent_and_minted_tokens(
+pub fn calculate_equivalent_and_minted_tokens(
     token_in_amount: TokenAmount,
     token_in_pool: TokenAmount,
     token_out_pool: TokenAmount,
@@ -535,7 +524,7 @@ fn calculate_equivalent_and_minted_tokens(
 /// * `minted_liquidity` [`TokenAmount`] - The total current minted liquidity.
 /// # Returns
 /// The new A pool, B pool and minted liquidity values ([`TokenAmount`], [`TokenAmount`], [`TokenAmount`])
-fn calculate_reclaim_output(
+pub fn calculate_reclaim_output(
     liquidity_token_amount: TokenAmount,
     pool_a: TokenAmount,
     pool_b: TokenAmount,

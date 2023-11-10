@@ -1,4 +1,4 @@
-package defi;
+package defi.properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,39 +12,38 @@ import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
 import java.math.BigInteger;
-import java.nio.file.Path;
 
-/** Test suite for the NFT auction smart contract. */
-public final class NftAuctionTest extends JunitContractTest {
-
-  private static final ContractBytes NFT_AUCTION_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/nft_auction.wasm"),
-          Path.of("../target/wasm32-unknown-unknown/release/nft_auction.abi"),
-          Path.of("../target/wasm32-unknown-unknown/release/nft_auction_runner"));
-  private static final ContractBytes TOKEN_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/token.wasm"),
-          Path.of("../target/wasm32-unknown-unknown/release/token.abi"));
-  private static final ContractBytes NFT_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/nft_contract.wasm"),
-          Path.of("../target/wasm32-unknown-unknown/release/nft_contract.abi"));
+/** Test suite for the {@link NftAuction} smart contract. */
+public abstract class NftAuctionTest extends JunitContractTest {
 
   private static final int DOGE_SUPPLY = 100000000;
-  private BlockchainAddress ownerDoge;
-  private BlockchainAddress auctionOwner;
-  private BlockchainAddress bidder1;
-  private BlockchainAddress bidder2;
-  private BlockchainAddress bidder3;
-  private BlockchainAddress nft;
   private final BigInteger nftId = BigInteger.valueOf(4200);
-  private BlockchainAddress doge;
-  private BlockchainAddress auction;
+
+  public BlockchainAddress ownerDoge;
+  public BlockchainAddress auctionOwner;
+  public BlockchainAddress bidder1;
+  public BlockchainAddress bidder2;
+  public BlockchainAddress bidder3;
+  public BlockchainAddress nft;
+  public BlockchainAddress doge;
+  public BlockchainAddress auction;
 
   private static final byte BIDDING = 1;
   private static final byte ENDED = 2;
   private static final long auctionEndTime = 3 * 60 * 60 * 1000;
+
+  private final ContractBytes contractBytesAuction;
+  private final ContractBytes contractBytesToken;
+  private final ContractBytes contractBytesNft;
+
+  protected NftAuctionTest(
+      ContractBytes contractBytesAuction,
+      ContractBytes contractBytesToken,
+      ContractBytes contractBytesNft) {
+    this.contractBytesAuction = contractBytesAuction;
+    this.contractBytesToken = contractBytesToken;
+    this.contractBytesNft = contractBytesNft;
+  }
 
   /**
    * Setup for other tests. Instantiates the accounts of all the contract owners deploys the
@@ -63,9 +62,9 @@ public final class NftAuctionTest extends JunitContractTest {
     // deploy token contracts
     byte[] dogeInitRpc =
         Token.initialize("Doge Coin", "DOGE", (byte) 18, BigInteger.valueOf(DOGE_SUPPLY));
-    doge = blockchain.deployContract(ownerDoge, TOKEN_CONTRACT_BYTES, dogeInitRpc);
+    doge = blockchain.deployContract(ownerDoge, contractBytesToken, dogeInitRpc);
     byte[] nftInitRpc = NftContract.initialize("Disinterested Monkey Boat Association", "DMBA", "");
-    nft = blockchain.deployContract(auctionOwner, NFT_CONTRACT_BYTES, nftInitRpc);
+    nft = blockchain.deployContract(auctionOwner, contractBytesNft, nftInitRpc);
     // transfer funds to the bidders and the NFT to the contract owner
     byte[] transferOne = Token.transfer(bidder1, BigInteger.valueOf(500));
     byte[] transferTwo = Token.transfer(bidder2, BigInteger.valueOf(1000));
@@ -90,7 +89,7 @@ public final class NftAuctionTest extends JunitContractTest {
     byte[] auctionInitRpc =
         NftAuction.initialize(nft, nftId, doge, BigInteger.valueOf(20), BigInteger.valueOf(5), 2);
 
-    auction = blockchain.deployContract(auctionOwner, NFT_AUCTION_CONTRACT_BYTES, auctionInitRpc);
+    auction = blockchain.deployContract(auctionOwner, contractBytesAuction, auctionInitRpc);
 
     nftState = NftContract.NFTContractState.deserialize(blockchain.getContractState(nft));
 
@@ -515,7 +514,7 @@ public final class NftAuctionTest extends JunitContractTest {
     assertThatThrownBy(
             () ->
                 blockchain.deployContract(
-                    auctionOwner, NFT_AUCTION_CONTRACT_BYTES, auctionInitRpcBidIllegal))
+                    auctionOwner, contractBytesAuction, auctionInitRpcBidIllegal))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Tried to create a contract buying a non publicContract token");
   }
@@ -535,7 +534,7 @@ public final class NftAuctionTest extends JunitContractTest {
     assertThatThrownBy(
             () ->
                 blockchain.deployContract(
-                    auctionOwner, NFT_AUCTION_CONTRACT_BYTES, auctionInitRpcSaleIllegal))
+                    auctionOwner, contractBytesAuction, auctionInitRpcSaleIllegal))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Tried to create a contract selling a non publicContract NFT");
   }

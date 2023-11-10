@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 compile_contracts() {
   if [ "$coverage" = true ]; then
@@ -40,11 +40,11 @@ test_without_coverage() {
 }
 
 help() {
-	echo "usage: ./run-java-tests.sh [-b][-c][-h]"
-	echo "-b    Build the contracts before running tests (if coverage is enabled also generates the instrumented executables)"
-	echo "-c    Test with coverage enabled"
-	echo "-h    Print this help message"
-	exit 0
+  echo "usage: ./run-java-tests.sh [-b][-c][-h]"
+  echo "-b    Build the contracts before running tests (if coverage is enabled also generates the instrumented executables)"
+  echo "-c    Test with coverage enabled"
+  echo "-h    Print this help message"
+  exit 0
 }
 
 while getopts :bch flag

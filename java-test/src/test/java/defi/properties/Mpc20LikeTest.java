@@ -1,4 +1,4 @@
-package defi;
+package defi.properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,26 +11,29 @@ import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.TestBlockchain;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
 import java.math.BigInteger;
-import java.nio.file.Path;
 import java.util.List;
 
-/** Test the Token contract. */
-public final class TokenTest extends JunitContractTest {
-
-  /** {@link ContractBytes} for {@link Token}. */
-  public static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../target/wasm32-unknown-unknown/release/token.wasm"),
-          Path.of("../target/wasm32-unknown-unknown/release/token.abi"),
-          Path.of("../target/wasm32-unknown-unknown/release/token_runner"));
+/** Test the {@link Token} contract. */
+public abstract class Mpc20LikeTest extends JunitContractTest {
 
   private static final BigInteger TOTAL_SUPPLY = BigInteger.valueOf(123123);
 
-  private BlockchainAddress account1;
-  private BlockchainAddress account2;
-  private BlockchainAddress account3;
-  private BlockchainAddress account4;
-  private BlockchainAddress token;
+  public BlockchainAddress account1;
+  public BlockchainAddress account2;
+  public BlockchainAddress account3;
+  public BlockchainAddress account4;
+  public BlockchainAddress tokenContract;
+
+  protected final ContractBytes contractBytesToken;
+
+  /**
+   * Initialize the test class.
+   *
+   * @param contractBytesToken Contract bytes to initialize the {@link Token} contract.
+   */
+  public Mpc20LikeTest(final ContractBytes contractBytesToken) {
+    this.contractBytesToken = contractBytesToken;
+  }
 
   /** Setup for all the other tests. Deploys token contract and instantiates accounts. */
   @ContractTest
@@ -40,14 +43,15 @@ public final class TokenTest extends JunitContractTest {
     account3 = blockchain.newAccount(4);
     account4 = blockchain.newAccount(5);
 
-    token =
+    tokenContract =
         deployTokenContract(blockchain, account1, "My Cool Token", "COOL", (byte) 8, TOTAL_SUPPLY);
 
     final BigInteger transferAmount = BigInteger.ONE;
 
     transfer(account1, account2, transferAmount);
 
-    final Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    final Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(state.totalSupply()).isEqualTo(TOTAL_SUPPLY);
@@ -61,12 +65,13 @@ public final class TokenTest extends JunitContractTest {
   @ContractTest(previous = "setup")
   void transferTenTokens() {
 
-    Token.TokenState tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState tokenState =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     BigInteger balanceBeforeTransfer = tokenState.balances().get(account1);
 
     transfer(account1, account3, BigInteger.TEN);
 
-    tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
+    tokenState = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertThat(tokenState.balances().get(account1))
         .isEqualTo(balanceBeforeTransfer.subtract(BigInteger.TEN));
@@ -77,11 +82,12 @@ public final class TokenTest extends JunitContractTest {
   /** When an account balance becomes zero the account is removed from balances. */
   @ContractTest(previous = "setup")
   void removeAccountWhenBalanceIsZero() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isNull();
 
     transfer(account2, account3, BigInteger.ONE);
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(state.balances().get(account3)).isEqualTo(BigInteger.ONE);
@@ -92,17 +98,18 @@ public final class TokenTest extends JunitContractTest {
   @ContractTest(previous = "setup")
   void underflowTransferInsufficientFunds() {
     byte[] transferToAccount3 = Token.transfer(account3, BigInteger.ONE);
-    blockchain.sendAction(account1, token, transferToAccount3);
+    blockchain.sendAction(account1, tokenContract, transferToAccount3);
 
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     BigInteger account1Balance = state.balances().get(account1);
 
     byte[] transfer = Token.transfer(account1, BigInteger.TWO);
-    assertThatThrownBy(() -> blockchain.sendAction(account3, token, transfer))
+    assertThatThrownBy(() -> blockchain.sendAction(account3, tokenContract, transfer))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Insufficient funds for transfer: 1/2");
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account1)).isEqualTo(account1Balance);
     assertThat(state.balances().get(account3)).isEqualTo(BigInteger.ONE);
   }
@@ -111,12 +118,13 @@ public final class TokenTest extends JunitContractTest {
   @ContractTest(previous = "setup")
   void transferZeroTokens() {
 
-    Token.TokenState tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState tokenState =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     BigInteger balanceBeforeAttempt = tokenState.balances().get(account1);
 
     transfer(account1, account3, BigInteger.ZERO);
 
-    tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
+    tokenState = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertThat(tokenState.balances().get(account1)).isEqualTo(balanceBeforeAttempt);
     assertStateInvariants(tokenState);
@@ -134,7 +142,8 @@ public final class TokenTest extends JunitContractTest {
     assertThat(allowance(account1, account2)).isNull();
 
     approve(account1, account2, BigInteger.valueOf(100));
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(allowance(account1, account2)).isEqualTo(BigInteger.valueOf(100));
@@ -151,7 +160,8 @@ public final class TokenTest extends JunitContractTest {
 
     transferFrom(account2, account1, account3, BigInteger.TEN);
 
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(allowance(account1, account2)).isEqualTo(BigInteger.valueOf(90));
@@ -171,7 +181,8 @@ public final class TokenTest extends JunitContractTest {
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Insufficient allowance for transfer_from: 100/110");
 
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(allowance(account1, account2)).isEqualTo(BigInteger.valueOf(100));
@@ -191,7 +202,7 @@ public final class TokenTest extends JunitContractTest {
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Insufficient allowance for transfer_from: 0/10");
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(allowance(account1, account2)).isNull();
@@ -200,16 +211,17 @@ public final class TokenTest extends JunitContractTest {
   /** Transferring approved tokens, where the approving account has zero tokens fails. */
   @ContractTest(previous = "setup")
   void underflowTransferBalanceNonExistent() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isNull();
     BigInteger account1Balance = state.balances().get(account1);
 
     byte[] transfer = Token.transfer(account1, BigInteger.ONE);
-    assertThatThrownBy(() -> blockchain.sendAction(account3, token, transfer))
+    assertThatThrownBy(() -> blockchain.sendAction(account3, tokenContract, transfer))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Insufficient funds for transfer: 0/1");
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account1)).isEqualTo(account1Balance);
   }
 
@@ -218,10 +230,11 @@ public final class TokenTest extends JunitContractTest {
   /** A user can send tokens to different account, by sending a bulk transfer. */
   @ContractTest(previous = "setup")
   void bulkTransferTokens() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isNull();
     byte[] transfer = Token.transfer(account2, BigInteger.TWO);
-    blockchain.sendAction(account1, token, transfer);
+    blockchain.sendAction(account1, tokenContract, transfer);
 
     List<Token.Transfer> transfers =
         List.of(
@@ -229,8 +242,8 @@ public final class TokenTest extends JunitContractTest {
             new Token.Transfer(account4, BigInteger.ONE));
 
     byte[] bulkTransfer = Token.bulkTransfer(transfers);
-    blockchain.sendAction(account2, token, bulkTransfer);
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    blockchain.sendAction(account2, tokenContract, bulkTransfer);
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isEqualTo(BigInteger.ONE);
     assertThat(state.balances().get(account4)).isEqualTo(BigInteger.ONE);
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.ONE);
@@ -239,11 +252,12 @@ public final class TokenTest extends JunitContractTest {
   /** A user can bulk transfer approved tokens for an account to two other accounts. */
   @ContractTest(previous = "setup")
   void bulkTransferFrom() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isNull();
 
     byte[] approve = Token.approve(account4, BigInteger.valueOf(2));
-    blockchain.sendAction(account1, token, approve);
+    blockchain.sendAction(account1, tokenContract, approve);
 
     List<Token.Transfer> transfers =
         List.of(
@@ -251,9 +265,9 @@ public final class TokenTest extends JunitContractTest {
             new Token.Transfer(account3, BigInteger.ONE));
 
     byte[] bulkTransfer = Token.bulkTransferFrom(account1, transfers);
-    blockchain.sendAction(account4, token, bulkTransfer);
+    blockchain.sendAction(account4, tokenContract, bulkTransfer);
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.TWO);
     assertThat(state.balances().get(account3)).isEqualTo(BigInteger.ONE);
   }
@@ -264,7 +278,8 @@ public final class TokenTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void bulkTransferTokensOneFails() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertThat(state.balances().get(account3)).isNull();
 
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.ONE);
@@ -276,11 +291,11 @@ public final class TokenTest extends JunitContractTest {
 
     byte[] bulkTransfer = Token.bulkTransfer(transfers);
 
-    assertThatThrownBy(() -> blockchain.sendAction(account2, token, bulkTransfer))
+    assertThatThrownBy(() -> blockchain.sendAction(account2, tokenContract, bulkTransfer))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining("Insufficient funds for transfer: 0/1");
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     assertStateInvariants(state);
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.ONE);
     assertThat(state.balances().get(account3)).isNull();
@@ -290,16 +305,17 @@ public final class TokenTest extends JunitContractTest {
   /** Bulk transfer must be given a non-empty list of transfers to perform. */
   @ContractTest(previous = "setup")
   void bulkTransferNoTransfers() {
-    Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.ONE);
 
     List<Token.Transfer> transfers = List.of();
 
     byte[] bulkTransfer = Token.bulkTransfer(transfers);
-    blockchain.sendAction(account2, token, bulkTransfer);
+    blockchain.sendAction(account2, tokenContract, bulkTransfer);
 
-    state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    state = Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
 
     assertStateInvariants(state);
     assertThat(state.balances().get(account2)).isEqualTo(BigInteger.ONE);
@@ -308,20 +324,20 @@ public final class TokenTest extends JunitContractTest {
   /** Helper function for making transfer RPC and invoking the transfer action. */
   private void transfer(BlockchainAddress from, BlockchainAddress to, BigInteger amount) {
     final byte[] rpc = Token.transfer(to, amount);
-    blockchain.sendAction(from, token, rpc);
+    blockchain.sendAction(from, tokenContract, rpc);
   }
 
   /** Helper function for making approve RPC and invoking the approve action. */
   private void approve(BlockchainAddress approver, BlockchainAddress approvee, BigInteger amount) {
     final byte[] rpc = Token.approve(approvee, amount);
-    blockchain.sendAction(approver, token, rpc);
+    blockchain.sendAction(approver, tokenContract, rpc);
   }
 
   /** Helper function for making transferFrom RPC and invoking the transferFrom action. */
   private void transferFrom(
       BlockchainAddress approvee, BlockchainAddress from, BlockchainAddress to, BigInteger amount) {
     final byte[] rpc = Token.transferFrom(from, to, amount);
-    blockchain.sendAction(approvee, token, rpc);
+    blockchain.sendAction(approvee, tokenContract, rpc);
   }
 
   /**
@@ -335,7 +351,7 @@ public final class TokenTest extends JunitContractTest {
    * @param totalSupply the total supply of a token.
    * @return the address for the deployed token contract
    */
-  public static BlockchainAddress deployTokenContract(
+  public BlockchainAddress deployTokenContract(
       TestBlockchain blockchain,
       BlockchainAddress creator,
       String tokenName,
@@ -343,7 +359,8 @@ public final class TokenTest extends JunitContractTest {
       byte decimals,
       BigInteger totalSupply) {
     final byte[] initRpc = Token.initialize(tokenName, tokenSymbol, decimals, totalSupply);
-    final BlockchainAddress address = blockchain.deployContract(creator, CONTRACT_BYTES, initRpc);
+    final BlockchainAddress address =
+        blockchain.deployContract(creator, contractBytesToken, initRpc);
 
     final Token.TokenState state =
         Token.TokenState.deserialize(blockchain.getContractState(address));
@@ -355,7 +372,8 @@ public final class TokenTest extends JunitContractTest {
   }
 
   private BigInteger allowance(final BlockchainAddress owner, final BlockchainAddress spender) {
-    final Token.TokenState state = Token.TokenState.deserialize(blockchain.getContractState(token));
+    final Token.TokenState state =
+        Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
     final var ownerAllowances = state.allowed().get(owner);
     return ownerAllowances == null ? null : ownerAllowances.get(spender);
   }

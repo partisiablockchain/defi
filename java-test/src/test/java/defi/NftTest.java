@@ -13,7 +13,7 @@ import java.nio.file.Path;
 
 /** NFT contract test. */
 public final class NftTest extends JunitContractTest {
-  private static final ContractBytes CONTRACT_BYTES =
+  static final ContractBytes CONTRACT_BYTES =
       ContractBytes.fromPaths(
           Path.of("../target/wasm32-unknown-unknown/release/nft_contract.wasm"),
           Path.of("../target/wasm32-unknown-unknown/release/nft_contract.abi"),
