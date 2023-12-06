@@ -21,7 +21,7 @@ crate-type = ['rlib', 'cdylib']
 zk-compute-path = "src/zk_compute.rs"
 
 [dev-dependencies]
-proptest = "1.3.1"
+proptest = "1.4.0"
 
 [dependencies]
 pbc_contract_common.workspace = true

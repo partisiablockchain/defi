@@ -27,6 +27,7 @@
 //! decimals: u8
 //! ```
 
+use crate::token_balances::TokenAmount;
 use pbc_contract_common::address::Address;
 use pbc_contract_common::events::EventGroupBuilder;
 use pbc_contract_common::shortname::Shortname;
@@ -36,6 +37,10 @@ const SHORTNAME_TRANSFER: Shortname = Shortname::from_u32(0x01);
 
 /// Shortname of the MPC20 token transfer from invocation
 const SHORTNAME_TRANSFER_FROM: Shortname = Shortname::from_u32(0x03);
+
+const SHORTNAME_APPROVE: Shortname = Shortname::from_u32(0x05);
+
+const SHORTNAME_APPROVE_RELATIVE: Shortname = Shortname::from_u32(0x07);
 
 /// Represents an individual token contract on the blockchain
 pub struct MPC20Contract {
@@ -68,7 +73,7 @@ impl MPC20Contract {
 
     /// Create an interaction with the `self` token contract, for transferring an `amount` of
     /// tokens from `sender` to `receiver`. Requires that calling contract have been given an
-    /// allowance by `sender`.
+    /// allowance by `sender`, by using [`Self::approve`].
     pub fn transfer_from(
         &self,
         event_group_builder: &mut EventGroupBuilder,
@@ -81,6 +86,36 @@ impl MPC20Contract {
             .argument(*sender)
             .argument(*receiver)
             .argument(amount)
+            .done();
+    }
+
+    /// Create an interaction with the `self` token contract, for approving an `approval_amount` of
+    /// tokens owned by the sender of the interaction, to be handled by the `approved` contract.
+    pub fn approve(
+        &self,
+        event_group_builder: &mut EventGroupBuilder,
+        approved: &Address,
+        approval_amount: TokenAmount,
+    ) {
+        event_group_builder
+            .call(self.contract_address, SHORTNAME_APPROVE)
+            .argument(*approved)
+            .argument(approval_amount)
+            .done();
+    }
+
+    /// Create an interaction with the `self` token contract, for approving an additional `approval_amount` of
+    /// tokens owned by the sender of the interaction, to be handled by the `approved` contract.
+    pub fn approve_relative(
+        &self,
+        event_group_builder: &mut EventGroupBuilder,
+        approved: &Address,
+        approval_amount: i128,
+    ) {
+        event_group_builder
+            .call(self.contract_address, SHORTNAME_APPROVE_RELATIVE)
+            .argument(*approved)
+            .argument(approval_amount)
             .done();
     }
 }

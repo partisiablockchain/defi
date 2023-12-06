@@ -8,8 +8,10 @@ use read_write_rpc_derive::ReadWriteRPC;
 use std::ops::{Add, Sub};
 
 use pbc_contract_common::address::Address;
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::ContractContext;
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
+use pbc_traits::ReadWriteState;
+use read_write_state_derive::ReadWriteState;
 
 /// Custom struct for the state of the contract.
 ///
@@ -28,9 +30,9 @@ use pbc_contract_common::sorted_vec_map::SortedVecMap;
 ///
 /// * `total_supply`: [`u128`], current amount of tokens for the TokenContract.
 ///
-/// * `balances`: [`SortedVecMap<Address, u128>`], ledger for the accounts associated with the contract.
+/// * `balances`: [`AvlTreeMap<Address, u128>`], ledger for the accounts associated with the contract.
 ///
-/// * `allowed`: [`SortedVecMap<Address, SortedVecMap<Address, u128>>`], allowance from an owner to a spender.
+/// * `allowed`: [`AvlTreeMap<AllowedAddress, u128>`], allowance from an owner to a spender.
 #[state]
 pub struct TokenState {
     name: String,
@@ -38,8 +40,21 @@ pub struct TokenState {
     symbol: String,
     owner: Address,
     total_supply: u128,
-    balances: SortedVecMap<Address, u128>,
-    allowed: SortedVecMap<Address, SortedVecMap<Address, u128>>,
+    balances: AvlTreeMap<Address, u128>,
+    allowed: AvlTreeMap<AllowedAddress, u128>,
+}
+
+/// Address pair representing some allowance. Owner allows spender to spend an amount of tokens.
+///
+/// ### Fields:
+///
+/// * `owner`: [`Address`], owner of tokens.
+///
+/// * `spender`: [`Address`], spender of tokens.
+#[derive(ReadWriteState, CreateTypeSpec, Eq, Ord, PartialEq, PartialOrd)]
+pub struct AllowedAddress {
+    owner: Address,
+    spender: Address,
 }
 
 /// Extension trait for inserting into a map holding balances.
@@ -57,13 +72,15 @@ trait BalanceMap<K: Ord, V> {
     fn insert_balance(&mut self, key: K, value: V);
 }
 
-/// Extension for [`SortedVecMap`] allowing the use of [`BalanceMap::insert_balance`].
+/// Extension for [`AvlTreeMap`] allowing the use of [`BalanceMap::insert_balance`].
 ///
 /// This implementation defines zero as `forall v: v - v = 0` (the subtract of a value from itself), to support a large variety
 /// of values. Might not work correctly for unusual implementations of [`Sub::sub`].
-impl<V: Sub<V, Output = V> + PartialEq + Copy> BalanceMap<Address, V> for SortedVecMap<Address, V> {
+impl<V: Sub<V, Output = V> + PartialEq + Copy + ReadWriteState, K: ReadWriteState + Ord>
+    BalanceMap<K, V> for AvlTreeMap<K, V>
+{
     #[allow(clippy::eq_op)]
-    fn insert_balance(&mut self, key: Address, value: V) {
+    fn insert_balance(&mut self, key: K, value: V) {
         let zero = value - value;
         if value == zero {
             self.remove(&key);
@@ -84,7 +101,7 @@ impl TokenState {
     ///
     /// An [`u64`] representing the amount owned by the passed address.
     pub fn balance_of(&self, owner: &Address) -> u128 {
-        self.balances.get(owner).copied().unwrap_or(0)
+        self.balances.get(owner).unwrap_or(0)
     }
 
     /// Function to check the amount of tokens that an owner allowed to a spender.
@@ -100,35 +117,16 @@ impl TokenState {
     /// A [`u64`] specifying the amount whicher `spender` is still allowed to withdraw from `owner`.
     pub fn allowance(&self, owner: &Address, spender: &Address) -> u128 {
         self.allowed
-            .get(owner)
-            .and_then(|allowed_from_owner| allowed_from_owner.get(spender))
-            .copied()
+            .get(&AllowedAddress {
+                owner: *owner,
+                spender: *spender,
+            })
             .unwrap_or(0)
     }
 
-    /// Updates the internal allowance map, overwriting `owner`'s allowance for `spender` to `amount`.
-    ///
-    /// If `owner` does not currently have any allowance, a new entry is added to `self`.
     fn update_allowance(&mut self, owner: Address, spender: Address, amount: u128) {
-        if !self.allowed.contains_key(&owner) {
-            self.allowed.insert(owner, SortedVecMap::new());
-        }
-        let allowed_from_owner = self.allowed.get_mut(&owner).unwrap();
-
-        allowed_from_owner.insert_balance(spender, amount);
-    }
-
-    /// Updates the internal allowance map, adding `delta` allowance for `spender` to additionally
-    /// spend of on behalf of `owner`.
-    ///
-    /// If `owner` does not currently have any allowance, a new entry is added to `self`, with `delta`
-    /// as the initial amount.
-    /// If `delta` is negative, the allowance is lowered.
-    /// Panics if adding `delta` would overflow, or the allowed balance would become negative.
-    fn update_allowance_relative(&mut self, owner: Address, spender: Address, delta: i128) {
-        let existing_allowance = self.allowance(&owner, &spender);
-        let new_allowance = existing_allowance.checked_add_signed(delta).unwrap();
-        self.update_allowance(owner, spender, new_allowance);
+        self.allowed
+            .insert_balance(AllowedAddress { owner, spender }, amount);
     }
 }
 
@@ -158,7 +156,7 @@ pub fn initialize(
     decimals: u8,
     total_supply: u128,
 ) -> TokenState {
-    let mut balances = SortedVecMap::new();
+    let mut balances = AvlTreeMap::new();
     balances.insert_balance(ctx.sender, total_supply);
 
     TokenState {
@@ -168,7 +166,7 @@ pub fn initialize(
         owner: ctx.sender,
         total_supply,
         balances,
-        allowed: SortedVecMap::new(),
+        allowed: AvlTreeMap::new(),
     }
 }
 
@@ -325,19 +323,6 @@ pub fn approve(
     amount: u128,
 ) -> TokenState {
     state.update_allowance(context.sender, spender, amount);
-    state
-}
-
-/// Allows `spender` to withdraw `delta` additional tokens from the owners account, relative to any
-/// pre-existing allowance.
-#[action(shortname = 0x07)]
-pub fn approve_relative(
-    context: ContractContext,
-    mut state: TokenState,
-    spender: Address,
-    delta: i128,
-) -> TokenState {
-    state.update_allowance_relative(context.sender, spender, delta);
     state
 }
 

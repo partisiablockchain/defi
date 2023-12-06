@@ -11,7 +11,7 @@ use read_write_state_derive::ReadWriteState;
 pub type TokenAmount = u128;
 
 /// Enum for token types
-#[derive(PartialEq, Eq, ReadWriteRPC, CreateTypeSpec, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, ReadWriteRPC, ReadWriteState, CreateTypeSpec, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Token {
     /// The value representing token A.
@@ -80,7 +80,7 @@ impl TokenBalance {
     ///
     /// # Returns
     /// A mutable value of type [`&mut TokenAmount`]
-    fn get_mut_amount_of(&mut self, token: Token) -> &mut TokenAmount {
+    pub fn get_mut_amount_of(&mut self, token: Token) -> &mut TokenAmount {
         if token == Token::LIQUIDITY {
             &mut self.liquidity_tokens
         } else if token == Token::A {
@@ -100,7 +100,7 @@ impl TokenBalance {
 }
 
 /// Empty token balance.
-const EMPTY_BALANCE: TokenBalance = TokenBalance {
+pub const EMPTY_BALANCE: TokenBalance = TokenBalance {
     a_tokens: 0,
     b_tokens: 0,
     liquidity_tokens: 0,
@@ -275,6 +275,7 @@ impl TokenBalances {
 
 /// Tracks the from-to pairs for transfers, etc.
 #[non_exhaustive]
+#[derive(ReadWriteState, CreateTypeSpec, Debug)]
 pub struct TokensInOut {
     /// The input token.
     pub token_in: Token,
