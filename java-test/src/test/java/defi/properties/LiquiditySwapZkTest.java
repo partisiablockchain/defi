@@ -239,7 +239,9 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
 
     // Now withdraw.
     blockchain.sendAction(
-        nonOwnerAddress1, swapContractAddress, ZkLiquiditySwap.withdraw(contractTokenB, receiving));
+        nonOwnerAddress1,
+        swapContractAddress,
+        ZkLiquiditySwap.withdraw(contractTokenB, receiving, false));
 
     // Check that the token is withdrawn from the swap contract.
     Assertions.assertThat(getDepositBalances()).doesNotContainKey(nonOwnerAddress1);
@@ -449,7 +451,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
         nonOwnerAddress1,
         swapContractAddress,
         ZkLiquiditySwap.withdraw(
-            contractTokenA, NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.valueOf(2))));
+            contractTokenA, NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.valueOf(2)), false));
 
     // Check that second swap is still performed.
     receivingB =
@@ -717,7 +719,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
   private void withdrawFromSwap(
       BlockchainAddress withdrawee, BlockchainAddress tokenAddress, BigInteger amount) {
     blockchain.sendAction(
-        withdrawee, swapContractAddress, ZkLiquiditySwap.withdraw(tokenAddress, amount));
+        withdrawee, swapContractAddress, ZkLiquiditySwap.withdraw(tokenAddress, amount, false));
   }
 
   private void performSwapsInQueue(int numSwapsToExecute) {

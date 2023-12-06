@@ -4,14 +4,17 @@ import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwap;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.ContractBytes;
-import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
+import com.partisiablockchain.language.junit.Previous;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.RepetitionInfo;
+import org.junit.jupiter.api.Test;
 
 /**
  * Testing a common interface for depositing and withdrawing of funds to a contract.
@@ -38,6 +41,8 @@ import org.assertj.core.api.Assertions;
 public abstract class DepositWithdrawTest extends JunitContractTest {
 
   private static final BigInteger TOTAL_SUPPLY = BigInteger.valueOf(99_000L);
+  private static final BigInteger MAX_ALLOWED_VALUE =
+      BigInteger.valueOf(1).shiftLeft(127).subtract(BigInteger.ONE);
 
   public BlockchainAddress creatorAddress;
   public BlockchainAddress contractTokenA;
@@ -63,7 +68,7 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
   protected abstract byte[] initContractUnderTestRpc(
       BlockchainAddress token1, BlockchainAddress token2);
 
-  @ContractTest
+  @Test
   void initializeContracts() {
     creatorAddress = blockchain.newAccount(1);
     users = List.of(creatorAddress, blockchain.newAccount(2));
@@ -90,7 +95,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
    * Users can deposit funds to a contract when the contract has been approved as spender, and the
    * user calls the deposit action.
    */
-  @ContractTest(previous = "initializeContracts")
+  @Test
+  @Previous("initializeContracts")
   void depositInitial() {
     final BigInteger amount = BigInteger.valueOf(1000);
 
@@ -105,7 +111,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
   }
 
   /** Attempting to deposit more funds than have been approved will result in an error. */
-  @ContractTest(previous = "initializeContracts")
+  @Test
+  @Previous("initializeContracts")
   void cannotDepositMoreThanTheApprovalAmount() {
     final BigInteger amountApprove = BigInteger.valueOf(1000);
     final BigInteger amountDeposit = BigInteger.valueOf(1001);
@@ -123,35 +130,43 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
   }
 
   /** Users can withdraw funds from the contract when they own some deposits. */
-  @ContractTest(previous = "depositInitial")
-  void canWithdrawDepositedAmount() {
-    final BigInteger amount = BigInteger.valueOf(1000);
+  @RepeatedTest(100)
+  @Previous("depositInitial")
+  void canWithdrawDepositedAmount(RepetitionInfo repetitionInfo) {
+    final BigInteger amount =
+        Arbitrary.bigInteger(repetitionInfo, BigInteger.valueOf(0), BigInteger.valueOf(1000));
 
     // Withdraw
     withdraw(users.get(0), amount);
 
-    assertTokenAaaBalance(users.get(0), TOTAL_SUPPLY);
-    assertTokenAaaBalance(contractUnderTestAddress, 0L);
+    assertTokenAaaBalance(
+        users.get(0), TOTAL_SUPPLY.subtract(BigInteger.valueOf(1000L)).add(amount));
+    assertTokenAaaBalance(contractUnderTestAddress, BigInteger.valueOf(1000L).subtract(amount));
   }
 
   /** Withdrawing funds that a user does not possess will result in an error. */
-  @ContractTest(previous = "depositInitial")
-  void cannotWithdrawMoreThanTheDepositedAmount() {
-    final BigInteger amount = BigInteger.valueOf(1001);
+  @RepeatedTest(100)
+  @Previous("depositInitial")
+  void cannotWithdrawMoreThanTheDepositedAmount(RepetitionInfo repetitionInfo) {
+    final BigInteger amount =
+        Arbitrary.bigInteger(repetitionInfo, BigInteger.valueOf(1001L), MAX_ALLOWED_VALUE);
 
     // Withdraw
     Assertions.assertThatCode(() -> withdraw(users.get(0), amount))
+        .as("amount = " + amount)
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient TokenA deposit");
+        .hasMessageContaining("Insufficient TokenA deposit: 1000/" + amount);
 
     assertTokenAaaBalance(users.get(0), 98_000L);
     assertTokenAaaBalance(contractUnderTestAddress, 1_000L);
   }
 
   /** Deposits are accumulative. */
-  @ContractTest(previous = "depositInitial")
-  void depositExtra() {
-    final BigInteger amount = BigInteger.valueOf(1000);
+  @RepeatedTest(100)
+  @Previous("depositInitial")
+  void depositExtra(RepetitionInfo repetitionInfo) {
+    final BigInteger amount =
+        Arbitrary.bigInteger(repetitionInfo, BigInteger.valueOf(1000), BigInteger.valueOf(98000L));
 
     // Approve contract
     approveDeposit(users.get(0), amount);
@@ -159,36 +174,28 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     // Send deposit
     deposit(users.get(0), amount);
 
-    assertTokenAaaBalance(users.get(0), 97_000L);
-    assertTokenAaaBalance(contractUnderTestAddress, 2_000L);
-  }
-
-  @ContractTest(previous = "depositExtra")
-  void withdrawEverything() {
-    final BigInteger amount = BigInteger.valueOf(2000);
-
-    // Approve contract
-    approveDeposit(users.get(0), amount);
-
-    // Send deposit
-    withdraw(users.get(0), amount);
-
-    assertTokenAaaBalance(users.get(0), 99_000L);
-    assertTokenAaaBalance(contractUnderTestAddress, 0L);
+    assertTokenAaaBalance(users.get(0), BigInteger.valueOf(98_000).subtract(amount));
+    assertTokenAaaBalance(contractUnderTestAddress, BigInteger.valueOf(1000).add(amount));
   }
 
   /** Attempting to transfer after depositing all their funds will result in an error. */
-  @ContractTest(previous = "depositInitial")
-  void cannotDepositMoreThanUserOwns() {
-    final BigInteger amount = TOTAL_SUPPLY;
+  @RepeatedTest(100)
+  @Previous("depositInitial")
+  void cannotDepositMoreThanUserOwns(RepetitionInfo repetitionInfo) {
+    final BigInteger amount =
+        Arbitrary.bigInteger(repetitionInfo, BigInteger.valueOf(98001L), MAX_ALLOWED_VALUE);
 
     // Approve contract
     approveDeposit(users.get(0), amount);
 
+    assertTokenAaaBalance(users.get(0), 98_000L);
+    assertTokenAaaBalance(contractUnderTestAddress, 1_000L);
+
     // Send deposit
     Assertions.assertThatCode(() -> deposit(users.get(0), amount))
+        .as("amount = " + amount)
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient funds for transfer: 98000/99000");
+        .hasMessageContaining("Insufficient funds for transfer: 98000/" + amount);
 
     assertTokenAaaBalance(users.get(0), 98_000L);
     assertTokenAaaBalance(contractUnderTestAddress, 1_000L);
@@ -198,7 +205,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
    * Deposited funds are tracked separately for each user. The actions of one user cannot *
    * influence another user's deposit.
    */
-  @ContractTest(previous = "initializeContracts")
+  @Test
+  @Previous("initializeContracts")
   void userDepositsAreIndependent() {
 
     // Transfer to user 1
@@ -234,7 +242,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     assertTokenAaaBalance(contractUnderTestAddress, 0L);
   }
 
-  @ContractTest(previous = "initializeContracts")
+  @Test
+  @Previous("initializeContracts")
   void enduranceTestingDepositWithdrawNoFailing() {
     final List<byte[]> depositHistory = generateDepositWithdrawHistory(100);
 
@@ -252,12 +261,12 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     BigInteger currentDeposit = BigInteger.ZERO;
     final List<byte[]> history = new ArrayList<>();
     for (int idx = 0; idx < historyLength; idx++) {
-      final BigInteger nextDeposit = nextRandomBigInteger(rand, ownedInTotal);
+      final BigInteger nextDeposit = Arbitrary.nextRandomBigInteger(rand, ownedInTotal);
       final BigInteger movement = nextDeposit.subtract(currentDeposit);
 
       final byte[] rpc;
       if (movement.compareTo(BigInteger.ZERO) < 0) {
-        rpc = LiquiditySwap.withdraw(contractTokenA, movement.negate());
+        rpc = LiquiditySwap.withdraw(contractTokenA, movement.negate(), false);
       } else {
         rpc = LiquiditySwap.deposit(contractTokenA, movement);
       }
@@ -266,14 +275,6 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
       currentDeposit = nextDeposit;
     }
     return List.copyOf(history);
-  }
-
-  private static BigInteger nextRandomBigInteger(Random rand, BigInteger n) {
-    BigInteger result = new BigInteger(n.bitLength(), rand);
-    while (result.compareTo(n) >= 0) {
-      result = new BigInteger(n.bitLength(), rand);
-    }
-    return result;
   }
 
   private void approveDeposit(BlockchainAddress owner, BigInteger amount) {
@@ -285,7 +286,7 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
   }
 
   private void withdraw(BlockchainAddress owner, BigInteger amount) {
-    sendActionToCut(owner, LiquiditySwap.withdraw(contractTokenA, amount));
+    sendActionToCut(owner, LiquiditySwap.withdraw(contractTokenA, amount, false));
   }
 
   private void sendActionToCut(final BlockchainAddress sender, byte[] rpc) {

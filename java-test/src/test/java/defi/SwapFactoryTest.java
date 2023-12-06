@@ -379,7 +379,7 @@ public final class SwapFactoryTest extends JunitContractTest {
   }
 
   private void withdraw(BlockchainAddress owner, BlockchainAddress token, BigInteger amount) {
-    final byte[] rpc = LiquiditySwap.withdraw(token, amount);
+    final byte[] rpc = LiquiditySwap.withdraw(token, amount, false);
     blockchain.sendAction(owner, swapAddress, rpc);
   }
 

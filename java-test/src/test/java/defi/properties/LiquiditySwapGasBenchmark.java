@@ -148,7 +148,7 @@ public abstract class LiquiditySwapGasBenchmark extends LiquiditySwapBaseTest {
                 "withdraw",
                 accounts.get(0),
                 swapContractAddress,
-                LiquiditySwap.withdraw(contractTokenA, BigInteger.ONE)),
+                LiquiditySwap.withdraw(contractTokenA, BigInteger.ONE, false)),
             new TestCase(
                 "provide liquidity",
                 accounts.get(0),
@@ -207,7 +207,8 @@ public abstract class LiquiditySwapGasBenchmark extends LiquiditySwapBaseTest {
     }
     return msg.contains("is less than the network fee")
         || msg.contains("Ran out of gas")
-        || msg.contains("Out of instruction gas!");
+        || msg.contains("Out of instruction gas!")
+        || msg.contains("Out of instruction cycles!");
   }
 
   private record BenchmarkInfo(long minimumGas, Duration duration) {

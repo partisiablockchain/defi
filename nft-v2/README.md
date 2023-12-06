@@ -18,4 +18,4 @@ An operator is approved to manage all NFTs owned by the owner, this includes set
 The contract is inspired by the ERC721 NFT contract with extensions for Metadata and Burnable\
 [https://github.com/ethereum/EIPs/blob/master/EIPS/eip-721.md](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-721.md)
 
-This example follows the mpc-721 standard contract interface. You can read more about this standard here:  [https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html)
+This example follows the mpc-721-v2 standard contract interface. You can read more about this standard here:  [https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html)

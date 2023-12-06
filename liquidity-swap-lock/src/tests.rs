@@ -1,5 +1,4 @@
-use defi_common::liquidity_util::calculate_swap_to_amount;
-use liquidity_swap::*;
+use super::*;
 use proptest::prelude::*;
 
 #[test]

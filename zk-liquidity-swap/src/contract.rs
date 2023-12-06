@@ -15,7 +15,6 @@ use pbc_zk::{Sbi128, Sbi8, SecretBinary};
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 use std::collections::VecDeque;
-use std::mem::size_of;
 
 use defi_common::math::u128_division_ceil;
 use defi_common::token_balances::{Token, TokenAmount, TokenBalance, TokenBalances, TokensInOut};
@@ -212,6 +211,10 @@ fn provide_liquidity_internal(
 /// Deposit token A or B into the calling users balance on the contract.
 /// If the contract is closed, the action fails.
 ///
+/// Requires that the swap contract has been approved at `token_address`
+/// by the sender. This is checked in a callback, implicitly guaranteeing
+/// that this only returns after the deposit transfer is complete.
+///
 /// ### Parameters:
 ///
 ///  * `token_address`: The address of the deposited token contract.
@@ -302,7 +305,7 @@ pub fn swap(
 ) -> (
     ContractState,
     Vec<EventGroup>,
-    ZkInputDef<SecretVarMetadata>,
+    ZkInputDef<SecretVarMetadata, SecretAmountAndDirection>,
 ) {
     assert!(
         state.contract_pools_have_liquidity(),
@@ -317,14 +320,10 @@ pub fn swap(
         "Balances are both zero; nothing to swap with."
     );
 
-    let input_def = ZkInputDef {
-        seal: false,
-        metadata: SecretVarMetadata {
-            only_if_at_front,
-            is_output_variable: false,
-        },
-        expected_bit_lengths: vec![AmountAndDirection::BITS],
-    };
+    let input_def = ZkInputDef::with_metadata(SecretVarMetadata {
+        only_if_at_front,
+        is_output_variable: false,
+    });
     (state, vec![], input_def)
 }
 
@@ -548,6 +547,7 @@ pub fn calculate_swap_to_amount(
 /// It preemptively updates the state of the user's balance before making the transfer.
 /// This means that if the transfer fails, the contract could end up with more money than it has registered, which is acceptable.
 /// This is to incentivize the user to spend enough gas to complete the transfer.
+/// If `wait_for_callback` is true, any callbacks will happen only after the withdrawal has completed.
 ///
 /// ### Parameters:
 ///
@@ -564,6 +564,7 @@ pub fn withdraw(
     _zk_state: ZkState<SecretVarMetadata>,
     token_address: Address,
     amount: TokenAmount,
+    wait_for_callback: bool,
 ) -> (ContractState, Vec<EventGroup>) {
     let token_in = state
         .token_balances
@@ -582,7 +583,23 @@ pub fn withdraw(
         amount,
     );
 
+    if wait_for_callback {
+        event_group_builder
+            .with_callback(SHORTNAME_WAIT_WITHDRAW_CALLBACK)
+            .done();
+    }
+
     (state, vec![event_group_builder.build()])
+}
+
+#[callback(shortname = 0x15, zk = true)]
+fn wait_withdraw_callback(
+    _context: ContractContext,
+    _callback_context: CallbackContext,
+    state: ContractState,
+    _zk_state: ZkState<SecretVarMetadata>,
+) -> (ContractState, Vec<EventGroup>) {
+    (state, vec![])
 }
 
 /// Empties the pools into the contract owner's balance and closes the contract.
@@ -645,14 +662,10 @@ pub struct AmountAndDirection {
     pub is_from_a: bool,
 }
 
-impl AmountAndDirection {
-    /// Number of bits used for [`AmountAndDirection`]
-    const BITS: u32 = TokenSwapAmount::BITS + 8 * size_of::<bool>() as u32;
-}
-
+/// Public version of `SecretAmountAndDirection`.
 #[derive(CreateTypeSpec, SecretBinary)]
 #[allow(dead_code)]
-struct SecretAmountAndDirection {
+pub struct SecretAmountAndDirection {
     /// Token amount.
     amount: Sbi128,
     /// The direction of the token swap. Only the lowest bit is used.
