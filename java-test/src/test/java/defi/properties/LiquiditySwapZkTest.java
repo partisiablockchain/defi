@@ -3,12 +3,12 @@ package defi.properties;
 import static java.util.Map.entry;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.parser.AbiParser;
 import com.partisiablockchain.language.abiclient.rpc.FnRpcBuilder;
-import com.partisiablockchain.language.abiclient.types.FileAbi;
 import com.partisiablockchain.language.abiclient.zk.ZkInputBuilder;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.abicodegen.ZkLiquiditySwap;
+import com.partisiablockchain.language.abimodel.model.FileAbi;
+import com.partisiablockchain.language.abimodel.parser.AbiParser;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
@@ -42,8 +42,8 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
   public BlockchainAddress contractTokenA;
   public BlockchainAddress contractTokenB;
 
-  protected final ContractBytes contractBytesToken;
-  protected final ContractBytes contractBytesSwap;
+  private final ContractBytes contractBytesToken;
+  private final ContractBytes contractBytesSwap;
 
   /**
    * Initialize the test class.

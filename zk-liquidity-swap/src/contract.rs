@@ -2,7 +2,6 @@
 
 #[macro_use]
 extern crate pbc_contract_codegen;
-extern crate core;
 
 use create_type_spec_derive::CreateTypeSpec;
 use defi_common::interact_mpc20::MPC20Contract;
@@ -34,7 +33,7 @@ pub struct SecretVarMetadata {
 /// This is the state of the contract which is persisted on the chain.
 ///
 /// The #\[state\] macro generates serialization logic for the struct.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[state]
 pub struct ContractState {
     /// The owner of the contract.
@@ -62,7 +61,7 @@ pub struct WorklistEntry {
 
 impl ContractState {
     /// Retrieves a copy of the pool that matches `token`.
-    fn get_pools(&self) -> &TokenBalance {
+    fn get_pools(&self) -> TokenBalance {
         self.token_balances
             .get_balance_for(&self.liquidity_pool_address)
     }
@@ -79,7 +78,7 @@ impl ContractState {
     ///
     /// ### Parameters:
     ///
-    ///  * `state`: [`&LiquiditySwapContractState`] - A reference to the current state of the contract.
+    ///  * `state`: [`ContractState`] - A reference to the current state of the contract.
     ///
     /// ### Returns:
     /// True if the pools have liquidity, false otherwise [`bool`]
@@ -175,9 +174,9 @@ pub fn provide_initial_liquidity(
 ///
 /// ### Parameters:
 ///
-///  * `state`: [`LiquiditySwapContractState`] - The current state of the contract.
+///  * `state`: [`ContractState`] - The current state of the contract.
 ///
-/// * `user`: [`&Address`] - The address of the user providing liquidity.
+/// * `user`: [`Address`] - The address of the user providing liquidity.
 ///
 /// * `token_in`: [`Address`] - The address of the token being token_in.
 ///

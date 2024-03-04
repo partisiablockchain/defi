@@ -6,9 +6,9 @@ extern crate pbc_contract_codegen;
 
 use create_type_spec_derive::CreateTypeSpec;
 use pbc_contract_common::address::{Address, AddressType, Shortname};
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 
@@ -20,7 +20,6 @@ use read_write_state_derive::ReadWriteState;
 ///
 /// * `amount`: [`u128`], the bid amount.
 #[derive(ReadRPC, WriteRPC, ReadWriteState, CreateTypeSpec)]
-#[cfg_attr(test, derive(PartialEq, Eq, Clone, Debug))]
 pub struct Bid {
     bidder: Address,
     amount: u128,
@@ -34,7 +33,6 @@ pub struct Bid {
 ///
 /// * `nft_for_sale`: [`Option<Address>`], The claimable nft for sale.
 #[derive(ReadWriteState, CreateTypeSpec)]
-#[cfg_attr(test, derive(PartialEq, Eq, Clone, Debug))]
 pub struct Claim {
     tokens_for_bidding: u128,
     nft_for_sale: Option<Address>,
@@ -83,11 +81,10 @@ fn transfer_from() -> Shortname {
 ///
 /// * `min_increment`: [`u128`], the minimum increment of each bid.
 ///
-/// * `claim_map`: [`SortedVecMap<Address, Claim>`], the map of all claimable tokens and/or claimable NFT.
+/// * `claim_map`: [`AvlTreeMap<Address, Claim>`], the map of all claimable tokens and/or claimable NFT.
 ///
 /// * `status`: [`u8`], the status of the contract.
 #[state]
-#[cfg_attr(test, derive(Clone, PartialEq, Eq, Debug))]
 pub struct NftAuctionContractState {
     contract_owner: Address,
     end_time_millis: i64,
@@ -97,7 +94,7 @@ pub struct NftAuctionContractState {
     highest_bidder: Bid,
     reserve_price: u128,
     min_increment: u128,
-    claim_map: SortedVecMap<Address, Claim>,
+    claim_map: AvlTreeMap<Address, Claim>,
     status: ContractStatus,
 }
 
@@ -121,9 +118,10 @@ impl NftAuctionContractState {
             );
         }
 
-        let value = self.claim_map.get_mut(&bidder).unwrap();
+        let mut value = self.claim_map.get(&bidder).unwrap();
         value.tokens_for_bidding += additional_claim.tokens_for_bidding;
         value.nft_for_sale = additional_claim.nft_for_sale;
+        self.claim_map.insert(bidder, value);
     }
 }
 
@@ -179,7 +177,7 @@ pub fn initialize(
         },
         reserve_price,
         min_increment,
-        claim_map: SortedVecMap::new(),
+        claim_map: AvlTreeMap::new(),
         status: CREATION,
     };
 

@@ -252,7 +252,7 @@ pub fn approve(
 #[action(shortname = 0x07)]
 pub fn set_approval_for_all(
     ctx: ContractContext,
-    state: NFTContractState,
+    mut state: NFTContractState,
     operator: Address,
     approved: bool,
 ) -> NFTContractState {
@@ -331,7 +331,7 @@ pub fn transfer_from(
 #[action(shortname = 0x01)]
 pub fn mint(
     ctx: ContractContext,
-    state: NFTContractState,
+    mut state: NFTContractState,
     to: Address,
     token_id: u128,
     token_uri: String,

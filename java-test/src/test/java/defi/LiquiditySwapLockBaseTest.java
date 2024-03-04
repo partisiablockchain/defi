@@ -59,6 +59,7 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
       BigInteger minimumOut) {
     blockchain.sendAction(
         swapper, swapContract, LiquiditySwapLock.instantSwap(token, amount, minimumOut));
+    assertLiquidityInvariant(swapContract);
   }
 
   void instantSwap(
@@ -158,6 +159,31 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     }
   }
 
+  void assertLiquidityInvariant(BlockchainAddress swapAddress) {
+    LiquiditySwapLock.LiquiditySwapContractState swapState = getSwapState(swapAddress);
+
+    LiquiditySwapLock.LockLiquidity lockLiquidityState = swapState.virtualState().lockLiquidity();
+
+    BigInteger virtualLiquidityFromLocksA = ZERO;
+    BigInteger virtualLiquidityFromLocksB = ZERO;
+    for (LiquiditySwapLock.LiquidityLock lock : swapState.virtualState().locks().values()) {
+      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.Token.TokenA())) {
+        virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.add(lock.amountIn());
+        virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.subtract(lock.amountOut());
+      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.Token.TokenB())) {
+        virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.subtract(lock.amountOut());
+        virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.add(lock.amountIn());
+      } else {
+        assert false;
+      }
+    }
+
+    LiquiditySwapLock.LockLiquidity lockLiquidityLocks =
+        new LiquiditySwapLock.LockLiquidity(virtualLiquidityFromLocksA, virtualLiquidityFromLocksB);
+
+    Assertions.assertThat(lockLiquidityState).isEqualTo(lockLiquidityLocks);
+  }
+
   void depositIntoSwap(
       BlockchainAddress swapContract,
       BlockchainAddress sender,
@@ -165,6 +191,7 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
       BigInteger amount) {
     blockchain.sendAction(sender, contractToken, Token.approve(swapContract, amount));
     blockchain.sendAction(sender, swapContract, LiquiditySwapLock.deposit(contractToken, amount));
+    assertLiquidityInvariant(swapContract);
   }
 
   void depositIntoSwap(
@@ -181,6 +208,7 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     // Get the lock.
     blockchain.sendAction(
         locker, lockContract, LiquiditySwapLock.acquireSwapLock(token, inAmount, minimumOut));
+    assertLiquidityInvariant(lockContract);
 
     // Get the id of the lock we just acquired, by checking for changes in state.
     Set<LiquiditySwapLock.LiquidityLockId> lockTracker = getCorrespondingLockTracker(lockContract);
@@ -205,6 +233,7 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
       BlockchainAddress swapContract,
       LiquiditySwapLock.LiquidityLockId lockId) {
     blockchain.sendAction(sender, swapContract, LiquiditySwapLock.executeLockSwap(lockId));
+    assertLiquidityInvariant(swapContract);
   }
 
   void executeLockSwap(BlockchainAddress sender, LiquiditySwapLock.LiquidityLockId lockId) {

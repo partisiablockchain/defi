@@ -2,68 +2,91 @@
 
 #[macro_use]
 extern crate pbc_contract_codegen;
-extern crate core;
 
-use pbc_contract_common::address::{Address, ShortnameCallback};
+use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
-use pbc_contract_common::events::{EventGroup, EventGroupBuilder};
+use pbc_contract_common::events::{EventGroup, EventGroupBuilder, GasCost};
+use std::cmp::max;
 use std::collections::VecDeque;
 
 use create_type_spec_derive::CreateTypeSpec;
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use read_write_state_derive::ReadWriteState;
 
 use read_write_rpc_derive::ReadRPC;
 
-use defi_common::interact_mpc20::MPC20Contract;
 use defi_common::liquidity_util::{AcquiredLiquidityLockInformation, LiquidityLockId};
 pub use defi_common::token_balances::Token;
 use defi_common::token_balances::TokenAmount;
 
+use defi_common::interact_mpc20::MPC20Contract;
 use defi_common::interact_swap::SwapContract;
 use defi_common::interact_swap_lock_partial::SwapLockContract;
 
 /// Type of route ids.
 pub type RouteId = u128;
 
+/// The maximum length of the token swap route.
+///
+/// # Why?
+///
+/// Partisia Blockchain limits the number of chained spawned events to around 127, which can easily
+/// be hit when executing routes longer than this constant.
+const MAX_ROUTE_LENGTH: usize = 5;
+
+/// Indicates the directional token swap that we intend to make along the route, including what to
+/// input, get as output, and where to make the swap.
+#[derive(ReadWriteState, CreateTypeSpec, Clone)]
+pub struct SwapInformation {
+    /// The swap contract we have a lock it.
+    swap_address: Address,
+    /// The input token on the swap.
+    token_in: Address,
+    /// The output token on the swap.
+    token_out: Address,
+}
+
 /// Information about a lock we still need to acquire in a route.
 #[derive(ReadWriteState, CreateTypeSpec)]
 struct WantedLockInfo {
-    swap_address: Address,
-    token_in: Address,
+    /// Information about the swap that we intend to use the lock for.
+    swap_info: SwapInformation,
+
+    /// The amount of token `token_in` to input.
     amount_in: TokenAmount,
+
+    /// The amount of token `token_out` that is wanted to be produced. If less that this is
+    /// produced, the lock will be cancelled.
     amount_out_minimum: TokenAmount,
 }
 
 /// Information about an acquired lock, which is pending to be executed.
-#[derive(ReadWriteState, CreateTypeSpec)]
+#[derive(ReadWriteState, CreateTypeSpec, Clone)]
 struct AcquiredLockInfo {
+    /// Information about the swap that we intend to use the lock for.
+    swap_info: SwapInformation,
+
+    /// The id of the lock.
     lock_id: LiquidityLockId,
-    swap_address: Address,
-    token_in: Address,
-    token_out: Address,
 }
 
 /// Information about token withdrawal, after executing a lock.
 #[derive(ReadWriteState, CreateTypeSpec)]
 struct PendingWithdrawInfo {
+    /// The swap contract we have a deposit on.
     swap_address: Address,
+    /// The deposited token.
     withdraw_token: Address,
-}
-
-/// Information related to a specific swap we intend to make along a route.
-#[derive(ReadWriteState, CreateTypeSpec, PartialEq)]
-pub struct SwapInformation {
-    swap_address: Address,
-    token_in: Address,
-    token_out: Address,
 }
 
 /// Information about the swap contracts known by the swap-router.
 #[derive(ReadWriteState, ReadRPC, CreateTypeSpec)]
 pub struct SwapContractInfo {
+    /// The swap contract we have a lock it.
     swap_address: Address,
+    /// The address of the token that the swap considers the A token.
     token_a_address: Address,
+    /// The address of the token that the swap considers the B token.
     token_b_address: Address,
 }
 
@@ -80,12 +103,10 @@ struct RouteInformation {
     final_received_amount: TokenAmount,
     /// Expected output token.
     final_token_out: Address,
-    /// Index of pending lock to update with lock id.
-    next_pending_lock_update: u32,
     /// Queue of locks yet to be acquired.
-    wanted_locks: VecDeque<WantedLockInfo>,
+    locks_wanted: VecDeque<WantedLockInfo>,
     /// Queue of acquired locks, which are ready for execution.
-    acquired_locks: VecDeque<AcquiredLockInfo>,
+    locks_waiting_for_execution: VecDeque<AcquiredLockInfo>,
     /// Withdrawal to be performed from specific swap contract.
     pending_withdraw: Option<PendingWithdrawInfo>,
 }
@@ -93,54 +114,42 @@ struct RouteInformation {
 impl RouteInformation {
     /// Readies lock information along a route for execution, to swap `user`'s tokens.
     ///
-    /// For each swap in `route`, creates a `MissingLockInfo`, and `PendingLockInfo`,
-    /// with the first and last missing long containing the initial swap amount,
-    /// and the required output amount, respectively.
+    /// For each swap in `route`, creates a [`WantedLockInfo`] with the first and last missing long
+    /// containing the initial swap amount, and the required output amount, respectively.
     pub fn new(
         route: Vec<SwapInformation>,
         initial_amount_in: TokenAmount,
         amount_out_minimum: TokenAmount,
         user: Address,
     ) -> Self {
-        let mut wanted_locks = VecDeque::with_capacity(route.len());
-        let mut acquired_locks = VecDeque::with_capacity(route.len());
+        let initial_token_in = route.first().unwrap().token_in;
+        let final_token_out = route.last().unwrap().token_out;
+
+        let mut locks_wanted = VecDeque::with_capacity(route.len());
 
         // Add missing and "dummy" pending locks for every swap on the route.
-        for swap_info in route.iter() {
+        for swap_info in route.into_iter() {
             let m_lock = WantedLockInfo {
-                swap_address: swap_info.swap_address,
-                token_in: swap_info.token_in,
+                swap_info,
                 amount_in: 0,
                 amount_out_minimum: 0,
             };
 
-            let p_lock = AcquiredLockInfo {
-                lock_id: LiquidityLockId::initial_id(),
-                swap_address: swap_info.swap_address,
-                token_in: swap_info.token_in,
-                token_out: swap_info.token_out,
-            };
-
-            wanted_locks.push_back(m_lock);
-            acquired_locks.push_back(p_lock);
+            locks_wanted.push_back(m_lock);
         }
 
         // Modify the first and last locks to contain known information about the overall swap.
-        wanted_locks.front_mut().unwrap().amount_in = initial_amount_in;
-        wanted_locks.back_mut().unwrap().amount_out_minimum = amount_out_minimum;
-
-        let first_swap = route.first().unwrap();
-        let last_swap = route.last().unwrap();
+        locks_wanted.front_mut().unwrap().amount_in = initial_amount_in;
+        locks_wanted.back_mut().unwrap().amount_out_minimum = amount_out_minimum;
 
         Self {
             user,
             initial_amount_in,
-            initial_token_in: first_swap.token_in,
+            initial_token_in,
             final_received_amount: 0,
-            final_token_out: last_swap.token_out,
-            next_pending_lock_update: 0,
-            wanted_locks,
-            acquired_locks,
+            final_token_out,
+            locks_wanted,
+            locks_waiting_for_execution: VecDeque::with_capacity(0),
             pending_withdraw: None,
         }
     }
@@ -148,30 +157,33 @@ impl RouteInformation {
     /// Removes and returns the next lock which needs to be acquired.
     ///
     /// Returns `None` when there are no more missing locks.
-    pub fn get_next_missing_lock(&mut self) -> Option<WantedLockInfo> {
-        self.wanted_locks.pop_front()
+    pub fn pop_next_wanted_lock(&mut self) -> Option<WantedLockInfo> {
+        self.locks_wanted.pop_front()
+    }
+
+    pub fn peek_next_wanted_lock(&self) -> Option<&WantedLockInfo> {
+        self.locks_wanted.front()
     }
 
     /// Update the next pending lock with the `lock_id` of a newly acquired missing lock.
     ///
     /// As a missing lock is acquired, this function should be called
     /// to store lock information for execution.
-    pub fn update_next_pending_lock_id(&mut self, lock_id: LiquidityLockId) {
-        if let Some(pending_lock) = self
-            .acquired_locks
-            .get_mut(self.next_pending_lock_update as usize)
-        {
-            pending_lock.lock_id = lock_id;
-        }
-        self.next_pending_lock_update += 1;
+    pub fn update_next_pending_lock_id(
+        &mut self,
+        swap_info: SwapInformation,
+        lock_id: LiquidityLockId,
+    ) {
+        self.locks_waiting_for_execution
+            .push_back(AcquiredLockInfo { swap_info, lock_id });
     }
 
     /// If any missing locks are left, will update the amount of swapped input tokens for the next missing lock to `amount_in`.
     ///
     /// As exchange rates can change while we computed a route, or are acquiring locks, the amounts swapped
     /// in missing locks should be updated by calling this function.
-    pub fn update_next_missing_lock_amount_in(&mut self, amount_in: TokenAmount) {
-        if let Some(lock) = self.wanted_locks.front_mut() {
+    pub fn update_next_wanted_lock_amount_in(&mut self, amount_in: TokenAmount) {
+        if let Some(lock) = self.locks_wanted.front_mut() {
             lock.amount_in = amount_in;
         }
     }
@@ -179,15 +191,15 @@ impl RouteInformation {
     /// Returns a reference to the next lock which needs to be executed.
     ///
     /// Returns `None` when there are no more pending locks.
-    pub fn get_next_pending_lock(&self) -> Option<&AcquiredLockInfo> {
-        self.acquired_locks.front()
+    pub fn peek_next_pending_lock(&self) -> Option<&AcquiredLockInfo> {
+        self.locks_waiting_for_execution.front()
     }
 
     /// Removes and returns the next lock which needs to be executed.
     ///
     /// Returns `None` when there are no more pending locks.
     pub fn take_next_pending_lock(&mut self) -> Option<AcquiredLockInfo> {
-        self.acquired_locks.pop_front()
+        self.locks_waiting_for_execution.pop_front()
     }
 
     /// Updates the route with a pending withdrawal.
@@ -200,7 +212,7 @@ impl RouteInformation {
     /// Removes and returns the next pending withdraw.
     ///
     /// Returns `None` when there are no more pending withdraws.
-    pub fn get_pending_withdraw(&mut self) -> Option<PendingWithdrawInfo> {
+    pub fn take_pending_withdraw(&mut self) -> Option<PendingWithdrawInfo> {
         self.pending_withdraw.take()
     }
 
@@ -210,17 +222,13 @@ impl RouteInformation {
     pub fn update_final_amount_out(&mut self, amount_out: TokenAmount) {
         self.final_received_amount = amount_out;
     }
-
-    pub fn get_ready_pending_locks(&mut self) -> &[AcquiredLockInfo] {
-        &self.acquired_locks.make_contiguous()[..self.next_pending_lock_update as usize]
-    }
 }
 
 /// Tracks currently active routes.
 #[derive(ReadWriteState, CreateTypeSpec)]
 struct RouteTracker {
     next_route_id: RouteId,
-    active_routes: SortedVecMap<RouteId, RouteInformation>,
+    active_routes: AvlTreeMap<RouteId, RouteInformation>,
 }
 
 impl RouteTracker {
@@ -228,7 +236,7 @@ impl RouteTracker {
     pub fn new() -> Self {
         Self {
             next_route_id: 0,
-            active_routes: SortedVecMap::new(),
+            active_routes: AvlTreeMap::new(),
         }
     }
 
@@ -258,13 +266,26 @@ impl RouteTracker {
         res
     }
 
-    /// Retrieves the mutable `RouteInformation` associated with `route_id`
+    /// Retrieves a [`RouteInformation`] associated with `route_id`.
     ///
     /// Panics if no route is associated with `route_id`.
-    fn get_mut_route(&mut self, route_id: RouteId) -> &mut RouteInformation {
+    fn get_route(&self, route_id: RouteId) -> RouteInformation {
         self.active_routes
-            .get_mut(&route_id)
+            .get(&route_id)
             .unwrap_or_else(|| panic!("Route {} doesn't exist.", route_id))
+    }
+
+    /// Retrieves and modifies the route for the given [`RouteId`]. Can produce a return value.
+    ///
+    /// Useful wrapper for making modifications to a route.
+    fn modify_route<F, T>(&mut self, route_id: RouteId, f: F) -> T
+    where
+        F: FnOnce(&mut RouteInformation) -> T,
+    {
+        let mut route = self.get_route(route_id);
+        let result_value = f(&mut route);
+        self.active_routes.insert(route_id, route);
+        result_value
     }
 }
 
@@ -314,6 +335,7 @@ pub fn route_swap(
 
     let route =
         validate_route_and_add_info(&swap_route, &state.swap_contracts, token_in, token_out);
+    let route_length = route.len();
 
     // Insert the found route into our state tracker.
     let route_id =
@@ -321,10 +343,10 @@ pub fn route_swap(
             .route_tracker
             .add_route(route, amount_in, amount_out_minimum, context.sender);
 
-    let route_information: &mut RouteInformation = state.route_tracker.get_mut_route(route_id);
-
     // First, take control of tokens, so the routing contract can approve tokens along the route.
+    let route_information: RouteInformation = state.route_tracker.get_route(route_id);
     let mut transfer_event_builder = EventGroup::builder();
+
     MPC20Contract::at_address(route_information.initial_token_in).transfer_from(
         &mut transfer_event_builder,
         &route_information.user,
@@ -332,9 +354,12 @@ pub fn route_swap(
         route_information.initial_amount_in,
     );
 
+    let total_cost = calculate_min_total_gas_cost(route_length);
+
     transfer_event_builder
         .with_callback(SHORTNAME_START_LOCK_CHAIN_CALLBACK)
         .argument(route_id)
+        .with_cost(total_cost)
         .done();
 
     (state, vec![transfer_event_builder.build()])
@@ -351,6 +376,13 @@ fn validate_route_and_add_info(
     token_in: Address,
     token_out: Address,
 ) -> Vec<SwapInformation> {
+    assert!(
+        swap_route.len() <= MAX_ROUTE_LENGTH,
+        "Swap route length ({}) is greater than maximum allowed ({}).",
+        swap_route.len(),
+        MAX_ROUTE_LENGTH
+    );
+
     let mut res = Vec::with_capacity(swap_route.len());
     let mut prev_output_token = token_in;
 
@@ -396,25 +428,20 @@ fn validate_route_and_add_info(
 fn start_lock_chain_callback(
     _context: ContractContext,
     callback_context: CallbackContext,
-    mut state: RouterState,
+    state: RouterState,
     route_id: RouteId,
 ) -> (RouterState, Vec<EventGroup>) {
     if !callback_context.success {
         panic!("Could not take control of tokens.");
     }
 
-    let route_information = state.route_tracker.get_mut_route(route_id);
-    let mut lock_event_builder = EventGroup::builder();
+    let route = state.route_tracker.get_route(route_id);
+
+    let lock_info = route.peek_next_wanted_lock().unwrap();
 
     // Acquire the first lock, and let callbacks handle the rest.
-    let lock_info = route_information.get_next_missing_lock().unwrap();
+    let mut lock_event_builder = EventGroup::builder();
     build_acquire_lock_events(&mut lock_event_builder, lock_info, route_id);
-
-    lock_event_builder
-        .with_callback(SHORTNAME_LOCK_ROUTE_CALLBACK)
-        .argument(route_id)
-        .done();
-
     (state, vec![lock_event_builder.build()])
 }
 
@@ -435,47 +462,52 @@ fn lock_route_callback(
     mut state: RouterState,
     route_id: RouteId,
 ) -> (RouterState, Vec<EventGroup>) {
-    let route_information: &mut RouteInformation = state.route_tracker.get_mut_route(route_id);
     let mut lock_event_builder = EventGroup::builder();
+    state
+        .route_tracker
+        .modify_route(route_id, |route_information| {
+            if !callback_context.success {
+                // We couldn't acquire a lock. Cleanup and throw error.
+                build_events_cancel_route(&mut lock_event_builder, route_information);
+            } else {
+                // Retrieve the output amount guaranteed from the lock just acquired, and update our state.
+                if let Some(exec_result) = callback_context.results.first() {
+                    let acquired_lock_info: AcquiredLiquidityLockInformation =
+                        exec_result.get_return_data();
 
-    if !callback_context.success {
-        // We couldn't acquire a lock. Cleanup and throw error.
-        build_cancel_lock_events(
-            &mut lock_event_builder,
-            route_information.get_ready_pending_locks(),
-            SHORTNAME_COULD_NOT_ACQUIRE_LOCK_ERROR,
-        );
-    } else {
-        // Retrieve the output amount guaranteed from the lock just acquired, and update our state.
-        if let Some(exec_result) = callback_context.results.first() {
-            let acquired_lock_info: AcquiredLiquidityLockInformation =
-                exec_result.get_return_data();
+                    let wanted_lock_for_acquired =
+                        route_information.pop_next_wanted_lock().unwrap();
 
-            // The amount in for the next lock is the amount we got from the previous lock.
-            route_information.update_next_missing_lock_amount_in(acquired_lock_info.amount_out);
-            // Update the lock id for the pending lock in our state.
-            route_information.update_next_pending_lock_id(acquired_lock_info.lock_id);
-        }
+                    // The amount in for the next lock is the amount we got from the previous lock.
+                    route_information
+                        .update_next_wanted_lock_amount_in(acquired_lock_info.amount_out);
+                    // Update the lock id for the pending lock in our state.
+                    route_information.update_next_pending_lock_id(
+                        wanted_lock_for_acquired.swap_info,
+                        acquired_lock_info.lock_id,
+                    );
+                }
 
-        match route_information.get_next_missing_lock() {
-            // Acquire the next lock lock by calling swap contract.
-            Some(lock_info) => {
-                build_acquire_lock_events(&mut lock_event_builder, lock_info, route_id);
+                match route_information.peek_next_wanted_lock() {
+                    // Acquire the next lock by calling swap contract.
+                    Some(lock_info) => {
+                        build_acquire_lock_events(&mut lock_event_builder, lock_info, route_id);
+                    }
+                    // All locks have been acquired, now start executing.
+                    None => {
+                        let pending_lock = route_information.peek_next_pending_lock().unwrap();
+                        build_execute_approve_events(
+                            &mut lock_event_builder,
+                            pending_lock,
+                            route_id,
+                            route_information.initial_amount_in,
+                        );
+                    }
+                };
             }
-            // All locks have been acquired, now start executing.
-            None => {
-                let pending_lock = route_information.get_next_pending_lock().unwrap();
-                build_execute_approve_events(
-                    &mut lock_event_builder,
-                    pending_lock,
-                    route_id,
-                    route_information.initial_amount_in,
-                );
-            }
-        };
-    }
-
-    (state, vec![lock_event_builder.build()])
+        });
+    let events = vec![lock_event_builder.build()];
+    (state, events)
 }
 
 /// Callback to handle executing all the acquired locks along a route, which performs the swaps.
@@ -493,29 +525,33 @@ fn execute_route_callback(
     route_id: RouteId,
     last_output: TokenAmount,
 ) -> (RouterState, Vec<EventGroup>) {
-    let route_information = state.route_tracker.get_mut_route(route_id);
     let mut execute_lock_event_builder = EventGroup::builder();
 
-    match route_information.get_next_pending_lock() {
-        Some(pending_lock) => {
-            build_execute_approve_events(
-                &mut execute_lock_event_builder,
-                pending_lock,
-                route_id,
-                last_output,
-            );
-        }
-        None => {
-            // We finished executing the locks, now we just need to transfer the tokens to the original user.
-            MPC20Contract::at_address(route_information.final_token_out).transfer(
-                &mut execute_lock_event_builder,
-                &route_information.user,
-                route_information.final_received_amount,
-            );
-        }
-    }
+    state
+        .route_tracker
+        .modify_route(route_id, |route_information| {
+            match route_information.peek_next_pending_lock() {
+                Some(pending_lock) => {
+                    build_execute_approve_events(
+                        &mut execute_lock_event_builder,
+                        pending_lock,
+                        route_id,
+                        last_output,
+                    );
+                }
+                None => {
+                    // We finished executing the locks, now we just need to transfer the tokens to the original user.
+                    MPC20Contract::at_address(route_information.final_token_out).transfer(
+                        &mut execute_lock_event_builder,
+                        &route_information.user,
+                        route_information.final_received_amount,
+                    );
+                }
+            }
+        });
 
-    (state, vec![execute_lock_event_builder.build()])
+    let events = vec![execute_lock_event_builder.build()];
+    (state, events)
 }
 
 /// Callback for swap contract approval completion at token contract. Builds events for deposit
@@ -528,14 +564,17 @@ fn approve_callback(
     route_id: RouteId,
     last_output: TokenAmount,
 ) -> (RouterState, Vec<EventGroup>) {
-    let route_information = state.route_tracker.get_mut_route(route_id);
+    let pending_lock: AcquiredLockInfo = state
+        .route_tracker
+        .modify_route(route_id, |route_information| {
+            route_information.peek_next_pending_lock().unwrap().clone()
+        });
+
     let mut deposit_event_builder = EventGroup::builder();
 
-    let pending_lock = route_information.get_next_pending_lock().unwrap();
-
-    SwapContract::at_address(pending_lock.swap_address).deposit(
+    SwapContract::at_address(pending_lock.swap_info.swap_address).deposit(
         &mut deposit_event_builder,
-        &pending_lock.token_in,
+        &pending_lock.swap_info.token_in,
         last_output,
     );
 
@@ -544,7 +583,8 @@ fn approve_callback(
         .argument(route_id)
         .done();
 
-    (state, vec![deposit_event_builder.build()])
+    let events = vec![deposit_event_builder.build()];
+    (state, events)
 }
 
 /// Callback for token deposit completion at swap contract. Builds events for execution
@@ -556,28 +596,31 @@ fn deposit_callback(
     mut state: RouterState,
     route_id: RouteId,
 ) -> (RouterState, Vec<EventGroup>) {
-    let route_information = state.route_tracker.get_mut_route(route_id);
     let mut execute_event_builder = EventGroup::builder();
 
-    let pending_lock = route_information.take_next_pending_lock().unwrap();
+    state
+        .route_tracker
+        .modify_route(route_id, |route_information| {
+            let pending_lock = route_information.take_next_pending_lock().unwrap();
 
-    SwapLockContract::at_address(pending_lock.swap_address)
-        .execute_lock(&mut execute_event_builder, pending_lock.lock_id);
+            SwapLockContract::at_address(pending_lock.swap_info.swap_address)
+                .execute_lock_swap(&mut execute_event_builder, pending_lock.lock_id);
 
-    // Make sure to callback our route withdraw handler.
-    execute_event_builder
-        .with_callback(SHORTNAME_RECEIVE_OUTPUT_AMOUNT_CALLBACK)
-        .argument(route_id)
-        .done();
+            // Make sure to callback our route withdraw handler.
+            execute_event_builder
+                .with_callback(SHORTNAME_RECEIVE_OUTPUT_AMOUNT_CALLBACK)
+                .argument(route_id)
+                .done();
 
-    // Add a pending withdrawal.
-    let pending_withdraw = PendingWithdrawInfo {
-        swap_address: pending_lock.swap_address,
-        withdraw_token: pending_lock.token_out,
-    };
-    route_information.update_pending_withdraw(pending_withdraw);
-
-    (state, vec![execute_event_builder.build()])
+            // Add a pending withdrawal.
+            let pending_withdraw = PendingWithdrawInfo {
+                swap_address: pending_lock.swap_info.swap_address,
+                withdraw_token: pending_lock.swap_info.token_out,
+            };
+            route_information.update_pending_withdraw(pending_withdraw);
+        });
+    let events = vec![execute_event_builder.build()];
+    (state, events)
 }
 
 /// Callback to handle withdrawing tokens, after executing a lock in the swap-chain.
@@ -592,16 +635,19 @@ fn receive_output_amount_callback(
     mut state: RouterState,
     route_id: RouteId,
 ) -> (RouterState, Vec<EventGroup>) {
-    let route_information = state.route_tracker.get_mut_route(route_id);
-
-    // Handle received amount from swap lock contract.
     let received_amount: TokenAmount = callback_context.results.last().unwrap().get_return_data();
-    route_information.update_final_amount_out(received_amount);
+
+    let pending_withdraw = state
+        .route_tracker
+        .modify_route(route_id, |route_information| {
+            // Handle received amount from swap lock contract.
+            route_information.update_final_amount_out(received_amount);
+
+            // Withdraw the amount from the swap contract.
+            route_information.take_pending_withdraw().unwrap()
+        });
 
     let mut withdraw_event_builder = EventGroup::builder();
-
-    // Withdraw the amount from the swap contract.
-    let pending_withdraw = route_information.get_pending_withdraw().unwrap();
     SwapContract::at_address(pending_withdraw.swap_address).withdraw(
         &mut withdraw_event_builder,
         &pending_withdraw.withdraw_token,
@@ -616,7 +662,8 @@ fn receive_output_amount_callback(
         .argument(received_amount)
         .done();
 
-    (state, vec![withdraw_event_builder.build()])
+    let events = vec![withdraw_event_builder.build()];
+    (state, events)
 }
 
 /// Panics with an error message saying locks could not be acquired.
@@ -632,40 +679,36 @@ fn could_not_acquire_lock_error(
     panic!("Could not acquire all locks in route.");
 }
 
-/// Panics with an error message saying that swap-router couldn't gain control of user tokens.
-///
-/// Meant to be used as a callback when lock-acquisition fails, to allow cancelling locks
-/// before throwing error.
-#[callback(shortname = 0x017)]
-fn could_not_take_control_of_tokens(
-    _context: ContractContext,
-    _callback_context: CallbackContext,
-    _state: RouterState,
-) -> (RouterState, Vec<EventGroup>) {
-    panic!("Could not take control of tokens.");
-}
-
-/// Builds the events needed to cancel all acquired locks, and callback to throw routing error.
-fn build_cancel_lock_events(
-    event_builder: &mut EventGroupBuilder,
-    locks_to_cancel: &[AcquiredLockInfo],
-    error_callback: ShortnameCallback,
-) {
-    for lock in locks_to_cancel {
-        SwapLockContract::at_address(lock.swap_address).cancel_lock(event_builder, lock.lock_id);
+/// Builds event set to free acquired locks and to return tokens to owner.
+fn build_events_cancel_route(event_builder: &mut EventGroupBuilder, route: &RouteInformation) {
+    // Cancel locks
+    for lock in route.locks_waiting_for_execution.iter() {
+        SwapLockContract::at_address(lock.swap_info.swap_address)
+            .cancel_lock(event_builder, lock.lock_id);
     }
-    event_builder.with_callback(error_callback).done();
+
+    // Refund input tokens
+    MPC20Contract::at_address(route.initial_token_in).transfer(
+        event_builder,
+        &route.user,
+        route.initial_amount_in,
+    );
+
+    // Create a failing interaction
+    event_builder
+        .with_callback(SHORTNAME_COULD_NOT_ACQUIRE_LOCK_ERROR)
+        .done();
 }
 
 /// Builds the events needed to acquire a lock, and callback our lock handler, for any potential missing locks.
 fn build_acquire_lock_events(
     event_builder: &mut EventGroupBuilder,
-    lock_info: WantedLockInfo,
+    lock_info: &WantedLockInfo,
     route_id: RouteId,
 ) {
-    SwapLockContract::at_address(lock_info.swap_address).acquire_swap_lock(
+    SwapLockContract::at_address(lock_info.swap_info.swap_address).acquire_swap_lock(
         event_builder,
-        &lock_info.token_in,
+        &lock_info.swap_info.token_in,
         lock_info.amount_in,
         lock_info.amount_out_minimum,
     );
@@ -684,9 +727,9 @@ fn build_execute_approve_events(
     approval_amount: TokenAmount,
 ) {
     // Build the execution events.
-    MPC20Contract::at_address(pending_lock.token_in).approve_relative(
+    MPC20Contract::at_address(pending_lock.swap_info.token_in).approve_relative(
         event_builder,
-        &pending_lock.swap_address,
+        &pending_lock.swap_info.swap_address,
         approval_amount.try_into().unwrap(),
     );
 
@@ -695,4 +738,61 @@ fn build_execute_approve_events(
         .argument(route_id)
         .argument(approval_amount)
         .done();
+}
+
+/// Gas amount sufficient for covering [`start_lock_chain_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_START_LOCK_CHAIN_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`lock_route_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_LOCK_ROUTE_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`approve_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_APPROVE_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`deposit_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_DEPOSIT_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`receive_output_amount_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_RECEIVE_OUTPUT_AMOUNT_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`execute_route_callback`]'s internal gas requirements.
+const INTERNAL_GAS_COST_EXECUTE_ROUTE_CALLBACK: GasCost = 1500;
+
+/// Gas amount sufficient for covering [`could_not_acquire_lock_error`]'s internal gas requirements.
+const INTERNAL_GAS_COST_CANCEL_LOCK_ERROR_CALLBACK: GasCost = 1500;
+
+/// Given the number of swaps on a route, calculates the worst-case minimum amount of gas for routing to succeed.
+fn calculate_min_total_gas_cost(number_of_swaps: usize) -> GasCost {
+    let number_of_swaps = number_of_swaps as u64;
+    let acquire_lock_cost =
+        SwapLockContract::GAS_COST_ACQUIRE_SWAP_LOCK + INTERNAL_GAS_COST_LOCK_ROUTE_CALLBACK;
+    let cancel_locks_cost = (number_of_swaps + 1) * SwapLockContract::GAS_COST_CANCEL_LOCK
+        + INTERNAL_GAS_COST_CANCEL_LOCK_ERROR_CALLBACK;
+    let execute_lock_cost =
+        // Cost of approving deposit at token.
+        MPC20Contract::GAS_COST_APPROVE_RELATIVE + INTERNAL_GAS_COST_APPROVE_CALLBACK +
+        // Cost of depositing into swap.
+        SwapContract::GAS_COST_DEPOSIT + INTERNAL_GAS_COST_DEPOSIT_CALLBACK +
+        // Cost of executing the lock.
+        SwapLockContract::GAS_COST_EXECUTE_LOCK + INTERNAL_GAS_COST_RECEIVE_OUTPUT_AMOUNT_CALLBACK +
+        // Cost of withdrawing the tokens.
+        SwapContract::GAS_COST_WITHDRAW + INTERNAL_GAS_COST_EXECUTE_ROUTE_CALLBACK;
+
+    let total_acquire_cost =
+        // Cost of starting chain
+        INTERNAL_GAS_COST_START_LOCK_CHAIN_CALLBACK +
+        // Cost of acquiring a lock, (#swaps + 1) time.
+        (number_of_swaps + 1) * acquire_lock_cost;
+
+    let total_execute_cost =
+        // Cost of executing a lock, #swaps times.
+        number_of_swaps * execute_lock_cost +
+        // Finally transfer the tokens to the user at the end token.
+        MPC20Contract::GAS_COST_TRANSFER;
+
+    // We either pay for execution, or cancelling locks, but never both.
+    max(
+        total_acquire_cost + total_execute_cost,
+        total_acquire_cost + cancel_locks_cost,
+    )
 }

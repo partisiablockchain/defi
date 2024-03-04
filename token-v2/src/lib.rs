@@ -124,9 +124,25 @@ impl TokenState {
             .unwrap_or(0)
     }
 
+    /// Updates the internal allowance map, overwriting `owner`'s allowance for `spender` to `amount`.
+    ///
+    /// If `owner` does not currently have any allowance, a new entry is added to `self`.
     fn update_allowance(&mut self, owner: Address, spender: Address, amount: u128) {
         self.allowed
             .insert_balance(AllowedAddress { owner, spender }, amount);
+    }
+
+    /// Updates the internal allowance map, adding `delta` allowance for `spender` to additionally
+    /// spend of on behalf of `owner`.
+    ///
+    /// If `owner` does not currently have any allowance, a new entry is added to `self`, with `delta`
+    /// as the initial amount.
+    /// If `delta` is negative, the allowance is lowered.
+    /// Panics if adding `delta` would overflow, or the allowed balance would become negative.
+    fn update_allowance_relative(&mut self, owner: Address, spender: Address, delta: i128) {
+        let existing_allowance = self.allowance(&owner, &spender);
+        let new_allowance = existing_allowance.checked_add_signed(delta).unwrap();
+        self.update_allowance(owner, spender, new_allowance);
     }
 }
 
@@ -323,6 +339,19 @@ pub fn approve(
     amount: u128,
 ) -> TokenState {
     state.update_allowance(context.sender, spender, amount);
+    state
+}
+
+/// Allows `spender` to withdraw `delta` additional tokens from the owners account, relative to any
+/// pre-existing allowance.
+#[action(shortname = 0x07)]
+pub fn approve_relative(
+    context: ContractContext,
+    mut state: TokenState,
+    spender: Address,
+    delta: i128,
+) -> TokenState {
+    state.update_allowance_relative(context.sender, spender, delta);
     state
 }
 

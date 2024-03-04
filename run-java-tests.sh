@@ -16,20 +16,31 @@ run_java_tests() {
   fi
 }
 
-test_with_coverage() {
+merge_and_report() {
   pushd java-test 1> /dev/null || exit
-  # Run contract tests
-  mvn test -Dcoverage
-  # Merge profraw
-  rust-profdata merge -sparse ./target/coverage/profraw/*.profraw --output=target/coverage/java_test.profdata
-  # Generate report
-  find ../target/wasm32-unknown-unknown/release/ -type f -executable -print | \
-  sed "s/^/--object /" | \
-  xargs rust-cov show --ignore-filename-regex=".cargo\.*" --ignore-filename-regex="target\.*" \
-     --instr-profile=target/coverage/java_test.profdata --Xdemangler=rustfilt --format="html" \
-        --output-dir=target/coverage/html
 
+  # Determine profraw files
+  find ./target/coverage/profraw/ -type f -name '*.profraw' > ./target/coverage/all-profraw-files
+
+  # Merge profraw
+  rust-profdata merge -sparse --input-files=./target/coverage/all-profraw-files --output=target/coverage/java_test.profdata
+
+  # Generate report
+  find ../target/wasm32-unknown-unknown/release/ -type f -executable -print |
+    sed "s/^/--object /" |
+    xargs rust-cov show --ignore-filename-regex=".cargo\.*" --ignore-filename-regex="target\.*" \
+      --instr-profile=target/coverage/java_test.profdata --Xdemangler=rustfilt --format="html" \
+      --output-dir=target/coverage/html
   popd 1> /dev/null || exit
+}
+
+test_with_coverage() {
+  # Run contract tests
+  pushd java-test 1> /dev/null || exit
+  mvn test -Dcoverage
+  popd 1> /dev/null || exit
+
+  merge_and_report
 }
 
 test_without_coverage() {
@@ -47,14 +58,13 @@ help() {
   exit 0
 }
 
-while getopts :bch flag
-do
-        case "${flag}" in
-                b) build=true ;;
-                c) coverage=true ;;
-                h) help ;;
-                *) echo "Invalid option: -$flag." && help ;;
-        esac
+while getopts :bch flag; do
+  case "${flag}" in
+    b) build=true ;;
+    c) coverage=true ;;
+    h) help ;;
+    *) echo "Invalid option: -$flag." && help ;;
+  esac
 done
 
 if [ "$build" = true ]; then

@@ -1,7 +1,7 @@
 //! # Liquidity Swap Lock invocation helper
 //!
 //! Mini-library for creating interactions with Liquidity Swap Lock contracts.
-//! Such contracts possesses the same interactions as regular swap contracts, [`interact_swap`],
+//! Such contracts possesses the same interactions as [regular swap contracts](`crate::interact_swap`),
 //! but with additional interactions for locking liquidity swaps.
 //!
 //! Only the additional interactions are described and implemented here.
@@ -18,15 +18,8 @@
 use crate::liquidity_util::LiquidityLockId;
 use crate::token_balances::TokenAmount;
 use pbc_contract_common::address::Address;
-use pbc_contract_common::events::EventGroupBuilder;
+use pbc_contract_common::events::{EventGroupBuilder, GasCost};
 use pbc_contract_common::shortname::Shortname;
-
-/// Shortname of the Swap Lock contract acquire lock invocation
-const SHORTNAME_ACQUIRE_SWAP_LOCK: Shortname = Shortname::from_u32(0x07);
-/// Shortname of the Swap Lock contract execute lock invocation
-const SHORTNAME_EXECUTE_SWAP_LOCK: Shortname = Shortname::from_u32(0x08);
-/// Shortname of the Swap Lock contract cancel lock invocation
-const SHORTNAME_CANCEL_LOCK: Shortname = Shortname::from_u32(0x09);
 
 /// Represents an individual swap contract with support for locks, on the blockchain
 pub struct SwapLockContract {
@@ -34,6 +27,28 @@ pub struct SwapLockContract {
 }
 
 impl SwapLockContract {
+    /// Shortname of the [`SwapLockContract::acquire_swap_lock`] invocation
+    const SHORTNAME_ACQUIRE_SWAP_LOCK: Shortname = Shortname::from_u32(0x07);
+    /// Shortname of the [`SwapLockContract::execute_lock_swap`] invocation
+    const SHORTNAME_EXECUTE_SWAP_LOCK: Shortname = Shortname::from_u32(0x08);
+    /// Shortname of the [`SwapLockContract::cancel_lock`] invocation
+    const SHORTNAME_CANCEL_LOCK: Shortname = Shortname::from_u32(0x09);
+
+    /// Gas amount sufficient for [`SwapLockContract::acquire_swap_lock`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_ACQUIRE_SWAP_LOCK: GasCost = 2500;
+
+    /// Gas amount sufficient for [`SwapLockContract::execute_lock_swap`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_EXECUTE_LOCK: GasCost = 2500;
+
+    /// Gas amount sufficient for [`SwapLockContract::cancel_lock`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_CANCEL_LOCK: GasCost = 2500;
+
     /// Create new swap lock contract representation for the given `swap_address`.
     pub fn at_address(swap_address: Address) -> Self {
         Self { swap_address }
@@ -51,23 +66,25 @@ impl SwapLockContract {
         amount_out_minimum: TokenAmount,
     ) {
         event_group_builder
-            .call(self.swap_address, SHORTNAME_ACQUIRE_SWAP_LOCK)
+            .call(self.swap_address, Self::SHORTNAME_ACQUIRE_SWAP_LOCK)
             .argument(*token_in)
             .argument(amount_in)
             .argument(amount_out_minimum)
+            .with_cost(Self::GAS_COST_ACQUIRE_SWAP_LOCK)
             .done();
     }
 
     /// Create an interaction with the `self` swap lock contract, for executing a previously
     /// acquired lock with id `lock_id`.
-    pub fn execute_lock(
+    pub fn execute_lock_swap(
         &self,
         event_group_builder: &mut EventGroupBuilder,
         lock_id: LiquidityLockId,
     ) {
         event_group_builder
-            .call(self.swap_address, SHORTNAME_EXECUTE_SWAP_LOCK)
+            .call(self.swap_address, Self::SHORTNAME_EXECUTE_SWAP_LOCK)
             .argument(lock_id)
+            .with_cost(Self::GAS_COST_EXECUTE_LOCK)
             .done();
     }
 
@@ -79,8 +96,9 @@ impl SwapLockContract {
         lock_id: LiquidityLockId,
     ) {
         event_group_builder
-            .call(self.swap_address, SHORTNAME_CANCEL_LOCK)
+            .call(self.swap_address, Self::SHORTNAME_CANCEL_LOCK)
             .argument(lock_id)
+            .with_cost(Self::GAS_COST_CANCEL_LOCK)
             .done();
     }
 }

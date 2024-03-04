@@ -12,13 +12,8 @@
 
 use crate::token_balances::TokenAmount;
 use pbc_contract_common::address::Address;
-use pbc_contract_common::events::EventGroupBuilder;
+use pbc_contract_common::events::{EventGroupBuilder, GasCost};
 use pbc_contract_common::shortname::Shortname;
-
-/// Shortname of the Swap contract deposit invocation
-const SHORTNAME_DEPOSIT_SWAP_LOCK: Shortname = Shortname::from_u32(0x01);
-/// Shortname of the Swap contract withdraw invocation
-const SHORTNAME_WITHDRAW_SWAP_LOCK: Shortname = Shortname::from_u32(0x03);
 
 /// Represents an individual swap contract on the blockchain.
 pub struct SwapContract {
@@ -26,6 +21,22 @@ pub struct SwapContract {
 }
 
 impl SwapContract {
+    /// Shortname of the [`SwapContract::deposit`] invocation
+    const SHORTNAME_DEPOSIT_SWAP_LOCK: Shortname = Shortname::from_u32(0x01);
+
+    /// Shortname of the [`SwapContract::withdraw`] invocation
+    const SHORTNAME_WITHDRAW_SWAP_LOCK: Shortname = Shortname::from_u32(0x03);
+
+    /// Gas amount sufficient for [`SwapContract::deposit`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_DEPOSIT: GasCost = 3170;
+
+    /// Gas amount sufficient for [`SwapContract::withdraw`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_WITHDRAW: GasCost = 2033;
+
     /// Create a new swap contract representation at `contract_address`.
     pub fn at_address(contract_address: Address) -> Self {
         Self { contract_address }
@@ -41,9 +52,10 @@ impl SwapContract {
         amount: TokenAmount,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_DEPOSIT_SWAP_LOCK)
+            .call(self.contract_address, Self::SHORTNAME_DEPOSIT_SWAP_LOCK)
             .argument(*token)
             .argument(amount)
+            .with_cost(Self::GAS_COST_DEPOSIT)
             .done();
     }
 
@@ -62,10 +74,11 @@ impl SwapContract {
         wait_for_callback: bool,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_WITHDRAW_SWAP_LOCK)
+            .call(self.contract_address, Self::SHORTNAME_WITHDRAW_SWAP_LOCK)
             .argument(*token)
             .argument(amount)
             .argument(wait_for_callback)
+            .with_cost(Self::GAS_COST_WITHDRAW)
             .done();
     }
 }

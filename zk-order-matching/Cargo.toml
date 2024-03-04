@@ -1,5 +1,5 @@
 [package]
-name = "zk-liquidity-swap"
+name = "zk-order-matching"
 readme = "README.md"
 version.workspace = true
 description.workspace = true
@@ -18,9 +18,6 @@ crate-type = ['rlib', 'cdylib']
 
 [package.metadata.zk]
 zk-compute-path = "src/zk_compute.rs"
-
-[dev-dependencies]
-proptest = "1.4.0"
 
 [dependencies]
 pbc_contract_common.workspace = true

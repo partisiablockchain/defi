@@ -147,6 +147,11 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         INITIAL_LIQUIDITY_C,
         INITIAL_LIQUIDITY_D,
         INITIAL_LIQUIDITY_TOKENS_CD);
+
+    // Check that initial virtual liquidity state matches actual (both 0).
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
+    assertLiquidityInvariant(swapLockContractAddressBtoC);
+    assertLiquidityInvariant(swapLockContractAddressCtoD);
   }
 
   /** The contract cannot be deployed with a swap fee less than 0 per mille. */
@@ -233,6 +238,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
                     LiquiditySwapLock.provideInitialLiquidity(INITIAL_LIQUIDITY_A, ZERO)))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("The given input amount yielded 0 minted liquidity");
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
   }
 
   /** A user cannot become an initial liquidity provider, if the contract contains liquidity. */
@@ -251,6 +257,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
                         NON_OWNER_TOKEN_AMOUNT_A, NON_OWNER_TOKEN_AMOUNT_B)))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("Can only initialize when both pools are empty");
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
   }
 
   /** A user cannot deposit more tokens than they own. */
@@ -274,16 +281,20 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Process the interaction.
     TxExecution s2 = s1.getContractInteraction();
     blockchain.executeEventAsync(s2);
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Process the interaction between the swap and token contract.
     TxExecution s3 = s2.getContractInteraction();
     blockchain.executeEventAsync(s3);
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Process the system callback.
     TxExecution s4 = s3.getSystemCallback();
     blockchain.executeEventAsync(s4);
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
     // Process the final contract callback.
     blockchain.executeEvent(s4.getContractCallback());
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Check that the final error is as expected
     Assertions.assertThat(s4.getContractCallback().getFailureCause().getErrorMessage())
@@ -332,6 +343,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         contractOwnerAddress,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.reclaimLiquidity(INITIAL_LIQUIDITY_TOKENS_AB));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Trying to acquire a lock fails.
     Assertions.assertThatCode(
@@ -413,6 +425,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         nonOwnerAddress1,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.withdraw(contractTokenB, receivingAmount, false));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     LiquiditySwapLock.LiquiditySwapContractState state = getSwapState(swapLockContractAddressAtoB);
 
@@ -502,6 +515,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
 
     blockchain.sendAction(
         nonOwnerAddress1, swapLockContractAddressAtoB, LiquiditySwapLock.cancelLock(lockId));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     LiquiditySwapLock.LiquiditySwapContractState state = getSwapState(swapLockContractAddressAtoB);
 
@@ -654,6 +668,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Cancel the first lock
     blockchain.sendAction(
         nonOwnerAddress1, swapLockContractAddressAtoB, LiquiditySwapLock.cancelLock(lockOne));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // States are still different
     Assertions.assertThat(getActualContractBalance(swapLockContractAddressAtoB))
@@ -662,6 +677,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Cancel the second (last) lock, and states should match
     blockchain.sendAction(
         nonOwnerAddress2, swapLockContractAddressAtoB, LiquiditySwapLock.cancelLock(lockTwo));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
     Assertions.assertThat(getActualContractBalance(swapLockContractAddressAtoB))
         .isEqualTo(getVirtualContractBalance(swapLockContractAddressAtoB));
   }
@@ -991,6 +1007,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         contractOwnerAddress,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.reclaimLiquidity(INITIAL_LIQUIDITY_TOKENS_AB));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // A user deposits into the swap.
     depositIntoSwap(
@@ -1041,6 +1058,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         nonOwnerAddress2,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.provideLiquidity(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Liquidity of of the actual pool is changed.
     Assertions.assertThat(getSwapState(swapLockContractAddressAtoB).tokenBalances().balances())
@@ -1081,6 +1099,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
                     LiquiditySwapLock.provideLiquidity(contractTokenA, ZERO)))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("The given input amount yielded 0 minted liquidity");
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
   }
 
   /**
@@ -1105,6 +1124,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         nonOwnerAddress2,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.provideLiquidity(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Other user perform a lock-swaps.
     final BigInteger lockReceivingAmount =
@@ -1128,6 +1148,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         nonOwnerAddress2,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.reclaimLiquidity(mintedAmount));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
     Assertions.assertThat(getActualContractBalance(swapLockContractAddressAtoB))
         .isEqualTo(
             new LiquiditySwapLock.TokenBalance(
@@ -1159,6 +1180,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         nonOwnerAddress2,
         swapLockContractAddressAtoB,
         LiquiditySwapLock.provideLiquidity(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A));
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // Acquire a lock
     lock(
@@ -1177,6 +1199,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
                     LiquiditySwapLock.reclaimLiquidity(mintedAmount)))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("Cannot reclaim liquidity while locks are present.");
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
   }
 
   /** A user who tries to execute a lock-swap with an invalid lock id will receive an error. */
@@ -1258,6 +1281,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining(
             "LiquidityLockId { raw_id: %s } is not a valid lock id.", invalidId.rawId());
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
   }
 
   /** A user who didn't acquire a specific lock-id cannot execute that lock. */
@@ -1307,6 +1331,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining(
             "Permission denied to handle lockID LiquidityLockId { raw_id: %s }.", lockId.rawId());
+    assertLiquidityInvariant(swapLockContractAddressAtoB);
 
     // The lock still exists.
     Assertions.assertThat(getVirtualSwapState(swapLockContractAddressAtoB).locks()).hasSize(1);
@@ -1381,6 +1406,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
               ownerAddress,
               res,
               LiquiditySwapLock.provideInitialLiquidity(INITIAL_LIQUIDITY_A, INITIAL_LIQUIDITY_B));
+          assertLiquidityInvariant(res);
 
           return res;
         };
@@ -1461,6 +1487,8 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     Assertions.assertThat(vb.locks()).isEmpty();
     Assertions.assertThat(vb.nextLockId())
         .isEqualTo(new LiquiditySwapLock.LiquidityLockId(BigInteger.ZERO));
+    Assertions.assertThat(vb.lockLiquidity())
+        .isEqualTo(new LiquiditySwapLock.LockLiquidity(ZERO, ZERO));
   }
 
   private void provideInitialLiquidity() {

@@ -7,7 +7,7 @@ use read_write_state_derive::ReadWriteState;
 
 /// Permission enum for modelling permission systems at runtime.
 ///
-/// Intention is to allow contracts creators to specify which addresses are allowed to call
+/// Intention is to allow contracts creators to specify which [`Address`]es are allowed to call
 /// specific invocations at initialization.
 #[derive(ReadRPC, ReadWriteState, CreateTypeSpec)]
 #[repr(C)]
@@ -16,10 +16,10 @@ pub enum Permission {
     #[discriminant(0)]
     Anybody {},
 
-    /// Permission where only those in [`addresses`] have the permission.
+    /// Permission where only those in [`Address`]es have the permission.
     #[discriminant(1)]
     Specific {
-        /// Addresses with the permission.
+        /// [`Address`]es with the permission.
         addresses: Vec<Address>,
     },
 }

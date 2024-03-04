@@ -53,9 +53,3 @@
 
  Due to the slowness of this process, the contract maintains a queue of swaps, to guarentee
  fairness.
-
- ## `perform_calls` feature
-
- Disabling the `perform_calls` feature allows for easier testing of the contract, as it will
- avoid calling to other contracts. In effect, this will allow anyone to pretend like they have
- any amount of tokens, as the contract is unable to verify with the token contracts.
