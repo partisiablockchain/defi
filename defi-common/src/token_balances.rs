@@ -2,7 +2,7 @@
 
 use create_type_spec_derive::CreateTypeSpec;
 use pbc_contract_common::address::{Address, AddressType};
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_traits::ReadWriteState;
 use read_write_rpc_derive::ReadWriteRPC;
 use read_write_state_derive::ReadWriteState;
@@ -79,7 +79,7 @@ impl TokenBalance {
     /// * `token`: [`Token`] - The token matching the desired amount.
     ///
     /// # Returns
-    /// A mutable value of type [`&mut TokenAmount`]
+    /// A mutable value of type [`TokenAmount`]
     pub fn get_mut_amount_of(&mut self, token: Token) -> &mut TokenAmount {
         if token == Token::LIQUIDITY {
             &mut self.liquidity_tokens
@@ -106,8 +106,10 @@ pub const EMPTY_BALANCE: TokenBalance = TokenBalance {
     liquidity_tokens: 0,
 };
 
+type Map<K, V> = AvlTreeMap<K, V>;
+
 /// Generalized token balance structure.
-#[derive(ReadWriteState, CreateTypeSpec, Debug, PartialEq, Clone)]
+#[derive(ReadWriteState, CreateTypeSpec, Debug)]
 pub struct TokenBalances {
     /// The address of the liquidity tokens (likely this contract itself.)
     pub token_lp_address: Address,
@@ -117,7 +119,7 @@ pub struct TokenBalances {
     pub token_b_address: Address,
     /// The map containing all token balances of all users and the contract itself. <br>
     /// The contract should always have a balance equal to the sum of all token balances.
-    balances: SortedVecMap<Address, TokenBalance>,
+    balances: Map<Address, TokenBalance>,
 }
 
 impl TokenBalances {
@@ -142,7 +144,7 @@ impl TokenBalances {
             token_lp_address,
             token_a_address,
             token_b_address,
-            balances: SortedVecMap::new(),
+            balances: Map::new(),
         })
     }
 
@@ -151,15 +153,16 @@ impl TokenBalances {
     ///
     /// ### Parameters:
     ///
-    /// * `user`: [`&Address`] - A reference to the user to add `amount` to.
+    /// * `user`: [`Address`] - A reference to the user to add `amount` to.
     ///
     /// * `token`: [`Token`] - The token to add to.
     ///
     /// * `amount`: [`TokenAmount`] - The amount to add.
     ///
     pub fn add_to_token_balance(&mut self, user: Address, token: Token, amount: TokenAmount) {
-        let token_balance = self.get_mut_balance_for(&user);
+        let mut token_balance = self.get_balance_for(&user);
         *token_balance.get_mut_amount_of(token) += amount;
+        self.balances.insert(user, token_balance);
     }
 
     /// Deducts tokens from the `balances` map of the contract. <br>
@@ -167,14 +170,14 @@ impl TokenBalances {
     ///
     /// ### Parameters:
     ///
-    /// * `user`: [`&Address`] - A reference to the user to deduct `amount` from.
+    /// * `user`: [`Address`] - A reference to the user to deduct `amount` from.
     ///
     /// * `token`: [`Token`] - The token to subtract from.
     ///
     /// * `amount`: [`TokenAmount`] - The amount to subtract.
     ///
     pub fn deduct_from_token_balance(&mut self, user: Address, token: Token, amount: TokenAmount) {
-        let user_balances = self.get_mut_balance_for(&user);
+        let mut user_balances = self.get_balance_for(&user);
 
         let token_balance = user_balances.get_amount_of(token);
 
@@ -188,6 +191,8 @@ impl TokenBalances {
 
         if user_balances.user_has_no_tokens() {
             self.balances.remove(&user);
+        } else {
+            self.balances.insert(user, user_balances);
         }
     }
 
@@ -218,28 +223,12 @@ impl TokenBalances {
     ///
     /// ### Parameters:
     ///
-    /// * `user`: [`&Address`] - A reference to the desired user address.
+    /// * `user`: [`Address`] - A reference to the desired user address.
     ///
     /// # Returns
     /// A copy of the token balance that matches `user`.
-    pub fn get_balance_for(&self, user: &Address) -> &TokenBalance {
-        let token_balance = self.balances.get(user).unwrap_or(&EMPTY_BALANCE);
-        token_balance
-    }
-
-    /// Retrieves a mutable reference to the token balance that matches `user`.
-    ///
-    /// ### Parameters:
-    ///
-    /// * `user`: [`&Address`] - A reference to the desired user address.
-    ///
-    /// # Returns
-    /// The mutable reference to the token balance that matches `user`.
-    pub fn get_mut_balance_for(&mut self, user: &Address) -> &mut TokenBalance {
-        if !self.balances.contains_key(user) {
-            self.balances.insert(*user, EMPTY_BALANCE);
-        }
-        self.balances.get_mut(user).unwrap()
+    pub fn get_balance_for(&self, user: &Address) -> TokenBalance {
+        self.balances.get(user).unwrap_or(EMPTY_BALANCE)
     }
 
     /// Retrieves a pair of tokens with the `token_in_token_address` being the "token_in"-token

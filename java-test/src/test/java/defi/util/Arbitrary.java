@@ -1,11 +1,22 @@
-package defi.properties;
+package defi.util;
 
 import java.math.BigInteger;
 import java.util.Random;
 import org.junit.jupiter.api.RepetitionInfo;
 
-final class Arbitrary {
+/** Utility class for generating arbitrary values for use in property-like tests. */
+public final class Arbitrary {
 
+  /**
+   * Generate an arbitrary {@link BigInteger} between the given bounds, with a bias towards the
+   * lower and upper bounds. Inspired by similar {@code Arbitrary} systems in property-based testing
+   * frameworks.
+   *
+   * @param repetitionInfo Used for seeding.
+   * @param min Minimum value, inclusive.
+   * @param max Maximum value, inclusive.
+   * @return generated value.
+   */
   public static BigInteger bigInteger(
       RepetitionInfo repetitionInfo, BigInteger min, BigInteger max) {
     final int rep = repetitionInfo.getCurrentRepetition();
@@ -25,10 +36,16 @@ final class Arbitrary {
       final Random rand = new Random(rep);
       sample = nextRandomBigInteger(rand, max.subtract(min)).add(min);
     }
-    System.out.println("sample : %s <= %s < %s".formatted(min, sample, max));
     return sample;
   }
 
+  /**
+   * Generate an {@link BigInteger} between {@code 0} (inclusive) and {@code n} (exclusive).
+   *
+   * @param rand Randomness to use.
+   * @param n Maximum value that the generate.
+   * @return generated value.
+   */
   public static BigInteger nextRandomBigInteger(Random rand, BigInteger n) {
     BigInteger result = new BigInteger(n.bitLength(), rand);
     while (result.compareTo(n) >= 0) {

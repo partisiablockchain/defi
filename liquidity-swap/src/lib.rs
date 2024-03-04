@@ -2,7 +2,6 @@
 
 #[macro_use]
 extern crate pbc_contract_codegen;
-extern crate core;
 
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
@@ -48,7 +47,7 @@ impl LiquiditySwapContractState {
     ///
     /// ### Parameters:
     ///
-    ///  * `state`: [`&LiquiditySwapContractState`] - A reference to the current state of the contract.
+    ///  * `state`: [`LiquiditySwapContractState`] - A reference to the current state of the contract.
     ///
     /// ### Returns:
     /// True if the pools have liquidity, false otherwise [`bool`]
@@ -536,7 +535,7 @@ pub fn calculate_reclaim_output(
 ///
 ///  * `state`: [`LiquiditySwapContractState`] - The current state of the contract.
 ///
-/// * `user`: [`&Address`] - The address of the user providing liquidity.
+/// * `user`: [`Address`] - The address of the user providing liquidity.
 ///
 /// * `token_in`: [`Address`] - The address of the token being token_in.
 ///

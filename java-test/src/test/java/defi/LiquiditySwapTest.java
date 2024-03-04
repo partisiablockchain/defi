@@ -29,7 +29,7 @@ public final class LiquiditySwapTest {
   @Nested
   final class GasBenchmark extends LiquiditySwapGasBenchmark {
     GasBenchmark() {
-      super(TokenContractTest.CONTRACT_BYTES, CONTRACT_BYTES);
+      super(TokenV2Test.CONTRACT_BYTES, CONTRACT_BYTES);
     }
   }
 

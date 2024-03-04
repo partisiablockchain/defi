@@ -12,6 +12,7 @@ import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.Previous;
 import com.partisiablockchain.language.junit.TestBlockchain;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
+import defi.util.Arbitrary;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;

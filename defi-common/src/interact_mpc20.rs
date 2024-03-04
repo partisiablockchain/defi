@@ -29,18 +29,8 @@
 
 use crate::token_balances::TokenAmount;
 use pbc_contract_common::address::Address;
-use pbc_contract_common::events::EventGroupBuilder;
+use pbc_contract_common::events::{EventGroupBuilder, GasCost};
 use pbc_contract_common::shortname::Shortname;
-
-/// Shortname of the MPC20 token transfer invocation
-const SHORTNAME_TRANSFER: Shortname = Shortname::from_u32(0x01);
-
-/// Shortname of the MPC20 token transfer from invocation
-const SHORTNAME_TRANSFER_FROM: Shortname = Shortname::from_u32(0x03);
-
-const SHORTNAME_APPROVE: Shortname = Shortname::from_u32(0x05);
-
-const SHORTNAME_APPROVE_RELATIVE: Shortname = Shortname::from_u32(0x07);
 
 /// Represents an individual token contract on the blockchain
 pub struct MPC20Contract {
@@ -51,6 +41,38 @@ pub struct MPC20Contract {
 pub type TokenTransferAmount = u128;
 
 impl MPC20Contract {
+    /// Shortname of the [`MPC20Contract::transfer`] invocation
+    const SHORTNAME_TRANSFER: Shortname = Shortname::from_u32(0x01);
+
+    /// Shortname of the [`MPC20Contract::transfer_from`] invocation
+    const SHORTNAME_TRANSFER_FROM: Shortname = Shortname::from_u32(0x03);
+
+    /// Shortname of the [`MPC20Contract::approve`] invocation
+    const SHORTNAME_APPROVE: Shortname = Shortname::from_u32(0x05);
+
+    /// Shortname of the [`MPC20Contract::approve_relative`] invocation
+    const SHORTNAME_APPROVE_RELATIVE: Shortname = Shortname::from_u32(0x07);
+
+    /// Gas amount sufficient for [`MPC20Contract::transfer`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_TRANSFER: GasCost = 1400;
+
+    /// Gas amount sufficient for MPC20 [`MPC20Contract::transfer_from`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_TRANSFER_FROM: GasCost = 1400;
+
+    /// Gas amount sufficient for MPC20 [`MPC20Contract::approve`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_APPROVE: GasCost = 1400;
+
+    /// Gas amount sufficient for MPC20 [`MPC20Contract::approve_relative`] invocation.
+    ///
+    /// Guarentees that the invocation does not fail due to insufficient gas.
+    pub const GAS_COST_APPROVE_RELATIVE: GasCost = 1400;
+
     /// Create new token contract representation for the given `contract_address`.
     pub fn at_address(contract_address: Address) -> Self {
         Self { contract_address }
@@ -65,9 +87,10 @@ impl MPC20Contract {
         amount: TokenTransferAmount,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_TRANSFER)
+            .call(self.contract_address, Self::SHORTNAME_TRANSFER)
             .argument(*receiver)
             .argument(amount)
+            .with_cost(Self::GAS_COST_TRANSFER)
             .done();
     }
 
@@ -82,10 +105,11 @@ impl MPC20Contract {
         amount: TokenTransferAmount,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_TRANSFER_FROM)
+            .call(self.contract_address, Self::SHORTNAME_TRANSFER_FROM)
             .argument(*sender)
             .argument(*receiver)
             .argument(amount)
+            .with_cost(Self::GAS_COST_TRANSFER_FROM)
             .done();
     }
 
@@ -98,9 +122,10 @@ impl MPC20Contract {
         approval_amount: TokenAmount,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_APPROVE)
+            .call(self.contract_address, Self::SHORTNAME_APPROVE)
             .argument(*approved)
             .argument(approval_amount)
+            .with_cost(Self::GAS_COST_APPROVE)
             .done();
     }
 
@@ -113,9 +138,10 @@ impl MPC20Contract {
         approval_amount: i128,
     ) {
         event_group_builder
-            .call(self.contract_address, SHORTNAME_APPROVE_RELATIVE)
+            .call(self.contract_address, Self::SHORTNAME_APPROVE_RELATIVE)
             .argument(*approved)
             .argument(approval_amount)
+            .with_cost(Self::GAS_COST_APPROVE_RELATIVE)
             .done();
     }
 }

@@ -11,12 +11,14 @@ members = [
     "nft",
     "nft-v2",
     "nft-auction",
+    "mocca",
     "conditional-escrow-transfer",
-    "zk-liquidity-swap"
+    "zk-liquidity-swap",
+    "zk-order-matching"
 ]
 
 [workspace.package]
-version = "4.78.0"
+version = "4.161.0"
 description = "Decentralized Finance contracts for the Partisia BlockChain."
 homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi"
 repository = "https://gitlab.com/partisiablockchain/language/contracts/defi"
@@ -25,20 +27,20 @@ edition = "2021"
 license = "MIT"
 
 [workspace.metadata.partisiablockchain]
-cargo-partisia = "4.51.0"
+cargo-partisia = "4.96.0"
 
 [workspace.metadata.zkcompiler]
-url = "https://gitlab.com/api/v4/groups/12499775/-/packages/maven/com/partisiablockchain/language/zkcompiler/4.57.0/zkcompiler-4.57.0-jar-with-dependencies.jar"
+url = "https://gitlab.com/api/v4/groups/12499775/-/packages/maven/com/partisiablockchain/language/zkcompiler/4.87.0/zkcompiler-4.87.0-jar-with-dependencies.jar"
 
-[workspace.metadata.abi-client]
-url = "https://gitlab.com/api/v4/groups/12499775/-/packages/maven/com/partisiablockchain/language/abi-client/4.65.0/abi-client-4.65.0-jar-with-dependencies.jar"
+[workspace.metadata.abi-cli]
+url = "https://gitlab.com/api/v4/groups/12499775/-/packages/maven/com/partisiablockchain/language/abi-cli/4.108.0/abi-cli-4.108.0-jar-with-dependencies.jar"
 
 [workspace.dependencies]
-pbc_contract_common = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-pbc_contract_codegen = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-pbc_traits = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-pbc_lib = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-read_write_rpc_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-read_write_state_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-create_type_spec_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
-pbc_zk = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.32.0" }
+pbc_contract_common = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+pbc_contract_codegen = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+pbc_traits = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+pbc_lib = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+read_write_rpc_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+read_write_state_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+create_type_spec_derive = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }
+pbc_zk = { git = "https://git@gitlab.com/partisiablockchain/language/contract-sdk.git", tag = "v.16.47.0" }

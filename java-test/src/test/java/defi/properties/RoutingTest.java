@@ -11,9 +11,9 @@ import com.partisiablockchain.language.junit.Previous;
 import com.partisiablockchain.language.testenvironment.TxExecution;
 import defi.LiquiditySwapLockPermissionTest;
 import defi.LiquiditySwapTestingUtility;
+import defi.util.ExecutionUtil;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -45,6 +45,7 @@ import org.junit.jupiter.api.RepetitionInfo;
  * contracts swap in both directions.
  */
 public abstract class RoutingTest extends JunitContractTest {
+  private static final int MAX_ROUTE_LENGTH = 5;
   private static final BigInteger ZERO = BigInteger.ZERO;
 
   private static final BigInteger TOTAL_SUPPLY_A = BigInteger.ONE.shiftLeft(30);
@@ -55,7 +56,7 @@ public abstract class RoutingTest extends JunitContractTest {
   private static final BigInteger TOTAL_SUPPLY_F = BigInteger.ONE.shiftLeft(37);
 
   private static final BigInteger A_LIQUIDITY_A_B = BigInteger.ONE.shiftLeft(21);
-  private static final BigInteger A_LIQUIDITY_A_C = BigInteger.ONE.shiftLeft(20);
+  private static final BigInteger A_LIQUIDITY_A_C = BigInteger.ONE.shiftLeft(21);
   private static final BigInteger B_LIQUIDITY_A_B = BigInteger.ONE.shiftLeft(19);
   private static final BigInteger B_LIQUIDITY_B_D = BigInteger.ONE.shiftLeft(18);
   private static final BigInteger C_LIQUIDITY_A_C = BigInteger.ONE.shiftLeft(23);
@@ -69,7 +70,7 @@ public abstract class RoutingTest extends JunitContractTest {
   public BlockchainAddress contractOwnerAddress;
   public BlockchainAddress nonOwnerAddress1;
   public BlockchainAddress nonOwnerAddress2;
-  private static final int numberOfExtraNonOwners = 10;
+  private final int numberOfExtraNonOwners;
   public List<BlockchainAddress> extraNonOwnerAddresses;
   public BlockchainAddress routerContract;
 
@@ -100,6 +101,8 @@ public abstract class RoutingTest extends JunitContractTest {
   protected final ContractBytes contractBytesSwap;
   protected final ContractBytes contractBytesSwapRouter;
 
+  private final long swapRouteGasAmount;
+
   /**
    * Initialize the test class.
    *
@@ -110,10 +113,14 @@ public abstract class RoutingTest extends JunitContractTest {
   public RoutingTest(
       final ContractBytes contractBytesToken,
       final ContractBytes contractBytesSwap,
-      final ContractBytes contractBytesSwapRouter) {
+      final ContractBytes contractBytesSwapRouter,
+      final long swapRouteGasAmount,
+      final int numberOfExtraNonOwners) {
     this.contractBytesToken = contractBytesToken;
     this.contractBytesSwap = contractBytesSwap;
     this.contractBytesSwapRouter = contractBytesSwapRouter;
+    this.swapRouteGasAmount = swapRouteGasAmount;
+    this.numberOfExtraNonOwners = numberOfExtraNonOwners;
   }
 
   /** Router contract can be correctly deployed. */
@@ -170,11 +177,11 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
     executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1));
 
-    Assertions.assertThat(getTokenState(contractTokenD).balances())
-        .containsEntry(nonOwnerAddress1, receivingD);
+    Assertions.assertThat(getTokenBalance(contractTokenD, nonOwnerAddress1)).isEqualTo(receivingD);
   }
 
   /**
@@ -210,7 +217,8 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenA,
                 contractTokenD,
                 NON_OWNER_TOKEN_AMOUNT_A,
-                BigInteger.ONE));
+                BigInteger.ONE),
+            swapRouteGasAmount);
     final TxExecution s2 =
         blockchain.sendActionAsync(
             nonOwnerAddress2,
@@ -220,7 +228,8 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenA,
                 contractTokenD,
                 NON_OWNER_TOKEN_AMOUNT_A,
-                BigInteger.ONE));
+                BigInteger.ONE),
+            swapRouteGasAmount);
 
     executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1, s2));
 
@@ -253,7 +262,8 @@ public abstract class RoutingTest extends JunitContractTest {
         List.of(swapLockContractAddressAandC, swapLockContractAddressCandD);
 
     List<TxExecution> spawns = new ArrayList<>();
-    for (BlockchainAddress nonOwner : extraNonOwnerAddresses) {
+    final int numberOfNonOwnersToUse = 10;
+    for (BlockchainAddress nonOwner : extraNonOwnerAddresses.subList(0, numberOfNonOwnersToUse)) {
       spawns.add(
           blockchain.sendActionAsync(
               nonOwner,
@@ -263,7 +273,8 @@ public abstract class RoutingTest extends JunitContractTest {
                   contractTokenA,
                   contractTokenD,
                   NON_OWNER_TOKEN_AMOUNT_A,
-                  BigInteger.ONE)));
+                  BigInteger.ONE),
+              swapRouteGasAmount));
     }
     executeTxExecutionInUnpredictableOrder(repetitionInfo, spawns);
 
@@ -271,7 +282,7 @@ public abstract class RoutingTest extends JunitContractTest {
       Assertions.assertThat(initialSpawn.getContractInteraction().isRecursiveSuccess()).isTrue();
     }
 
-    for (BlockchainAddress nonOwner : extraNonOwnerAddresses) {
+    for (BlockchainAddress nonOwner : extraNonOwnerAddresses.subList(0, numberOfNonOwnersToUse)) {
       assertTokenBalanceMarginEntry(contractTokenD, nonOwner, receivingD, 2.6);
     }
   }
@@ -287,7 +298,7 @@ public abstract class RoutingTest extends JunitContractTest {
     List<TxExecution> spawns = new ArrayList<>();
     List<BigInteger> expectedOutcomes = new ArrayList<>();
 
-    final int amountOfRoutes = numberOfExtraNonOwners;
+    final int amountOfRoutes = 10;
 
     List<RandomRouteInfo> randomRoutes = generateRandomRoutes(repetitionInfo, amountOfRoutes, 3);
 
@@ -302,9 +313,9 @@ public abstract class RoutingTest extends JunitContractTest {
       blockchain.sendAction(
           routeUser, info.initialToken, Token.approve(routerContract, info.initialAmount));
 
-      if (getTokenState(info.finalToken).balances().containsKey(routeUser)) {
-        expectedOutcomes.add(
-            info.expectedOutput.add(getTokenState(info.finalToken).balances().get(routeUser)));
+      final BigInteger balance = getTokenBalance(info.finalToken, routeUser);
+      if (balance != null) {
+        expectedOutcomes.add(info.expectedOutput.add(balance));
       } else {
         expectedOutcomes.add(info.expectedOutput);
       }
@@ -323,7 +334,7 @@ public abstract class RoutingTest extends JunitContractTest {
                   info.finalToken,
                   info.initialAmount,
                   BigInteger.ONE),
-              10_000_000_000L));
+              swapRouteGasAmount));
     }
 
     executeTxExecutionInUnpredictableOrder(repetitionInfo, spawns);
@@ -337,8 +348,89 @@ public abstract class RoutingTest extends JunitContractTest {
       BlockchainAddress nonOwner = extraNonOwnerAddresses.get(i);
       RandomRouteInfo info = randomRoutes.get(i);
       // The tokens arrived at their intended location (within margin)
-      assertTokenBalanceMarginEntry(info.finalToken, nonOwner, expectedOutcomes.get(i), 30);
+      assertTokenBalanceMarginEntry(info.finalToken, nonOwner, expectedOutcomes.get(i), 50);
+      Assertions.assertThat(getTokenBalance(info.finalToken, nonOwner)).isGreaterThan(ZERO);
     }
+  }
+
+  /**
+   * A huge amount of users can execute different swap routes at the same time, all resulting in
+   * successful route-swaps.
+   */
+  @RepeatedTest(1)
+  @Previous("contractInit")
+  void swapHugeNumberOfRoutesAtTheSameTime(RepetitionInfo repetitionInfo) {
+    initializeTestMappings();
+    List<TxExecution> spawns = new ArrayList<>();
+
+    final int amountOfRoutes = numberOfExtraNonOwners;
+    final int numberOfSwaps = 4;
+    List<RandomRouteInfo> randomRoutes =
+        generateRandomRoutes(repetitionInfo, amountOfRoutes, numberOfSwaps);
+
+    // Finish approving first
+    for (int i = 0; i < amountOfRoutes; i++) {
+      RandomRouteInfo info = randomRoutes.get(i);
+      BlockchainAddress routeUser = extraNonOwnerAddresses.get(i);
+
+      blockchain.sendAction(
+          contractOwnerAddress, info.initialToken, Token.transfer(routeUser, info.initialAmount));
+
+      blockchain.sendAction(
+          routeUser, info.initialToken, Token.approve(routerContract, info.initialAmount));
+    }
+    final long guaranteedGasCost = 90_000;
+    // Then start async calls.
+    for (int i = 0; i < amountOfRoutes; i++) {
+      RandomRouteInfo info = randomRoutes.get(i);
+      BlockchainAddress routeUser = extraNonOwnerAddresses.get(i);
+      spawns.add(
+          blockchain.sendActionAsync(
+              routeUser,
+              routerContract,
+              SwapRouter.routeSwap(
+                  info.swapRoute,
+                  info.initialToken,
+                  info.finalToken,
+                  info.initialAmount,
+                  BigInteger.ONE),
+              guaranteedGasCost));
+    }
+
+    executeTxExecutionInUnpredictableOrder(repetitionInfo, spawns);
+
+    // All the interactions fully succeeded.
+    for (TxExecution initialSpawn : spawns) {
+      Assertions.assertThat(initialSpawn.getContractInteraction().isRecursiveSuccess()).isTrue();
+    }
+
+    for (int i = 0; i < amountOfRoutes; i++) {
+      BlockchainAddress nonOwner = extraNonOwnerAddresses.get(i);
+      RandomRouteInfo info = randomRoutes.get(i);
+      // The tokens arrived at their intended location (within margin)
+      Assertions.assertThat(getTokenBalance(info.finalToken, nonOwner)).isGreaterThan(ZERO);
+    }
+  }
+
+  @ContractTest(previous = "contractInit")
+  void gasTest() {
+    // Approve the router at the original token.
+    blockchain.sendAction(
+        nonOwnerAddress1, contractTokenA, Token.approve(routerContract, NON_OWNER_TOKEN_AMOUNT_A));
+
+    // Route swap A -> C -> D.
+    List<BlockchainAddress> swapRoute =
+        List.of(swapLockContractAddressAandC, swapLockContractAddressCandD);
+
+    final TxExecution s1 =
+        blockchain.sendAction(
+            nonOwnerAddress1,
+            routerContract,
+            SwapRouter.routeSwap(
+                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
+
+    s1.printGasAccounting();
   }
 
   /**
@@ -405,7 +497,7 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenC,
                 NON_OWNER_TOKEN_AMOUNT_A,
                 BigInteger.ONE),
-            100_000_000L);
+            swapRouteGasAmount);
     final TxExecution s2 =
         blockchain.sendActionAsync(
             nonOwnerAddress2,
@@ -416,15 +508,15 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenA,
                 NON_OWNER_TOKEN_AMOUNT_C,
                 BigInteger.ONE),
-            100_000_000L);
+            swapRouteGasAmount);
 
     executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1, s2));
 
     Assertions.assertThat(s1.getContractInteraction().isRecursiveSuccess()).isTrue();
     Assertions.assertThat(s2.getContractInteraction().isRecursiveSuccess()).isTrue();
 
-    assertTokenBalanceMarginEntry(contractTokenC, nonOwnerAddress1, receivingDtoC, 1);
-    assertTokenBalanceMarginEntry(contractTokenA, nonOwnerAddress2, receivingBtoA, 2);
+    assertTokenBalanceMarginEntry(contractTokenC, nonOwnerAddress1, receivingDtoC, 14);
+    assertTokenBalanceMarginEntry(contractTokenA, nonOwnerAddress2, receivingBtoA, 20);
   }
 
   /**
@@ -458,11 +550,10 @@ public abstract class RoutingTest extends JunitContractTest {
         routerContract,
         SwapRouter.routeSwap(
             swapRoute, contractTokenA, contractTokenB, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
-        100_000_000L);
+        swapRouteGasAmount);
 
     // User gets the desired tokens.
-    Assertions.assertThat(getTokenState(contractTokenB).balances())
-        .containsEntry(nonOwnerAddress1, receivingB);
+    Assertions.assertThat(getTokenBalance(contractTokenB, nonOwnerAddress1)).isEqualTo(receivingB);
   }
 
   private TxExecution executeEventAsync(TxExecution tx) {
@@ -496,7 +587,8 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
 
     // Execute user -> router interaction.
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
@@ -506,8 +598,8 @@ public abstract class RoutingTest extends JunitContractTest {
     TxExecution s4 = executeEventAsync(s3.getSystemCallback());
     TxExecution s5 = executeEventAsync(s4.getContractCallback());
     // We took control of tokens.
-    Assertions.assertThat(getTokenState(contractTokenA).balances())
-        .containsEntry(routerContract, NON_OWNER_TOKEN_AMOUNT_A);
+    Assertions.assertThat(getTokenBalance(contractTokenA, routerContract))
+        .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
 
     // Acquire first lock at AC.
     TxExecution s6 = executeEventAsync(s5.getContractInteraction());
@@ -560,8 +652,7 @@ public abstract class RoutingTest extends JunitContractTest {
     TxExecution s24 = executeEventAsync(s23.getContractInteraction());
     // Withdrawing triggers a transfer from the swap contract at the token.
     TxExecution s25 = executeEventAsync(s24.getContractInteraction());
-    Assertions.assertThat(getTokenState(contractTokenC).balances())
-        .containsEntry(routerContract, receivingC);
+    Assertions.assertThat(getTokenBalance(contractTokenC, routerContract)).isEqualTo(receivingC);
     // A callback is triggered to the swap contract, to ensure correct ordering.
     TxExecution s26 = executeEventAsync(s25.getSystemCallback());
     TxExecution s27 = executeEventAsync(s26.getContractCallback());
@@ -599,8 +690,7 @@ public abstract class RoutingTest extends JunitContractTest {
     // Start withdrawal of D tokens.
     TxExecution s42 = executeEventAsync(s41.getContractInteraction());
     TxExecution s43 = executeEventAsync(s42.getContractInteraction());
-    Assertions.assertThat(getTokenState(contractTokenD).balances())
-        .containsEntry(routerContract, receivingD);
+    Assertions.assertThat(getTokenBalance(contractTokenD, routerContract)).isEqualTo(receivingD);
     // And handle the callback to next lock execute.
     TxExecution s44 = executeEventAsync(s43.getSystemCallback());
     TxExecution s45 = executeEventAsync(s44.getContractCallback());
@@ -610,8 +700,7 @@ public abstract class RoutingTest extends JunitContractTest {
     // No more locks to execute, transfer D tokens to user.
     blockchain.executeEvent(s47.getContractInteraction());
 
-    Assertions.assertThat(getTokenState(contractTokenD).balances())
-        .containsEntry(nonOwnerAddress1, receivingD);
+    Assertions.assertThat(getTokenBalance(contractTokenD, nonOwnerAddress1)).isEqualTo(receivingD);
   }
 
   /**
@@ -630,7 +719,8 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenE, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenE, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
 
     // We get the correct error message.
@@ -644,6 +734,10 @@ public abstract class RoutingTest extends JunitContractTest {
     // The interaction didn't spawn further events -> No calls to swap contracts -> no locks
     // acquired.
     Assertions.assertThat(s2.getSpawnedEvents()).isEmpty();
+
+    // Check that no tokens have been taken from the end user.
+    Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
+        .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
   }
 
   /**
@@ -665,7 +759,8 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenB, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenB, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
 
     // We get the correct error message.
@@ -681,6 +776,10 @@ public abstract class RoutingTest extends JunitContractTest {
     // The interaction didn't spawn further events -> No calls to swap contracts -> no locks
     // acquired.
     Assertions.assertThat(s2.getSpawnedEvents()).isEmpty();
+
+    // Check that no tokens have been taken from the end user.
+    Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
+        .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
   }
 
   /**
@@ -699,7 +798,8 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenE, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenE, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
 
     // We get the correct error message.
@@ -715,8 +815,9 @@ public abstract class RoutingTest extends JunitContractTest {
    * If the minimum output amount is higher than the locks can provide, the final lock acquisition
    * fails, and all acquired locks so far are cancelled.
    */
-  @ContractTest(previous = "contractInit")
-  void routeMinimumOutputTooHigh() {
+  @Previous("contractInit")
+  @RepeatedTest(5)
+  void routeMinimumOutputTooHigh(RepetitionInfo repetitionInfo) {
     // Calculate receiving amounts.
     final BigInteger receivingC =
         calculateReceivingAmount(
@@ -742,54 +843,33 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenA,
                 contractTokenD,
                 NON_OWNER_TOKEN_AMOUNT_A,
-                receivingD.add(BigInteger.ONE)));
+                receivingD.add(BigInteger.ONE)),
+            swapRouteGasAmount);
 
-    // Execute user -> router interaction.
-    TxExecution s2 = executeEventAsync(s1.getContractInteraction());
-
-    // Execute router -> token transfer_from interaction.
-    TxExecution s3 = executeEventAsync(s2.getContractInteraction());
-    TxExecution s4 = executeEventAsync(s3.getSystemCallback());
-    TxExecution s5 = executeEventAsync(s4.getContractCallback());
-
-    // Acquire first lock at A -> C.
-    TxExecution s6 = executeEventAsync(s5.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).virtualState().locks())
-        .hasSize(1);
-
-    // Callback to acquire next lock.
-    TxExecution s7 = executeEventAsync(s6.getSystemCallback());
-    TxExecution s8 = executeEventAsync(s7.getContractCallback());
-
-    // Second lock acquisition at B -> C fails as the minimum out is too high.
-    TxExecution s9 = executeEventAsync(s8.getContractInteraction());
-    Assertions.assertThat(s8.getContractInteraction().getFailureCause().getErrorMessage())
-        .contains(
+    ExecutionUtil.executeTxExecutionInUnpredictableOrder(this, repetitionInfo, List.of(s1))
+        .assertFailures(
+            swapLockContractAddressCandD,
             "Swap would produce %s output tokens, but minimum was set to %s."
-                .formatted(receivingD, receivingD.add(BigInteger.ONE)));
+                .formatted(receivingD, receivingD.add(BigInteger.ONE)),
+            routerContract,
+            "Could not acquire all locks in route.");
 
-    // Execute the callbacks, to go back to our router.
-    TxExecution s10 = executeEventAsync(s9.getSystemCallback());
-    TxExecution s11 = executeEventAsync(s10.getContractCallback());
-
-    // Cancel the A -> C lock.
-    TxExecution s12 = executeEventAsync(s11.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).virtualState().locks())
+    // Check for no locks, and no tokens taken from the user
+    Assertions.assertThat(getSwapState(swapLockContractAddressAandB).virtualState().locks())
         .hasSize(0);
-
-    // Handle callback to allow router to throw error.
-    TxExecution s13 = executeEventAsync(s12.getSystemCallback());
-    blockchain.executeEvent(s13.getContractCallback());
-    Assertions.assertThat(s13.getContractCallback().getFailureCause().getErrorMessage())
-        .contains("Could not acquire all locks in route.");
+    Assertions.assertThat(getSwapState(swapLockContractAddressBandD).virtualState().locks())
+        .hasSize(0);
+    Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
+        .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
   }
 
   /**
    * If a user provides a route which includes a swap contract without liquidity, lock acquisition
    * fails, and all acquired locks are cancelled.
    */
-  @ContractTest(previous = "contractInit")
-  void swapNoLiquidity() {
+  @Previous("contractInit")
+  @RepeatedTest(5)
+  void swapNoLiquidity(RepetitionInfo repetitionInfo) {
     // Route swap A -> B -> D -> F.
     List<BlockchainAddress> swapRoute =
         List.of(
@@ -801,63 +881,28 @@ public abstract class RoutingTest extends JunitContractTest {
     blockchain.sendAction(
         nonOwnerAddress1, contractTokenA, Token.approve(routerContract, NON_OWNER_TOKEN_AMOUNT_A));
 
-    TxExecution s1 =
+    final TxExecution s1 =
         blockchain.sendActionAsync(
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenF, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenF, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
 
-    // Execute user -> router interaction.
-    TxExecution s2 = executeEventAsync(s1.getContractInteraction());
+    ExecutionUtil.executeTxExecutionInUnpredictableOrder(this, repetitionInfo, List.of(s1))
+        .assertFailures(
+            swapLockContractAddressDandF,
+            "Pools must have existing liquidity to acquire a lock",
+            routerContract,
+            "Could not acquire all locks in route.");
 
-    // Execute router -> token transfer_from interaction.
-    TxExecution s3 = executeEventAsync(s2.getContractInteraction());
-    TxExecution s4 = executeEventAsync(s3.getSystemCallback());
-    TxExecution s5 = executeEventAsync(s4.getContractCallback());
-
-    // Acquire first lock at A -> B.
-    TxExecution s6 = executeEventAsync(s5.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandB).virtualState().locks())
-        .hasSize(1);
-
-    // Callback to acquire next lock.
-    TxExecution s7 = executeEventAsync(s6.getSystemCallback());
-    TxExecution s8 = executeEventAsync(s7.getContractCallback());
-
-    // Acquire second lock at B -> D.
-    TxExecution s9 = executeEventAsync(s8.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressBandD).virtualState().locks())
-        .hasSize(1);
-
-    // Execute callbacks to acquire next lock.
-    TxExecution s10 = executeEventAsync(s9.getSystemCallback());
-    TxExecution s11 = executeEventAsync(s10.getContractCallback());
-
-    // Third lock acquisition at D -> F fails, as there is no liquidity.
-    TxExecution s12 = executeEventAsync(s11.getContractInteraction());
-    Assertions.assertThat(s11.getContractInteraction().getFailureCause().getErrorMessage())
-        .contains("Pools must have existing liquidity to acquire a lock");
-
-    // Execute the callbacks, to go back to our router.
-    TxExecution s13 = executeEventAsync(s12.getSystemCallback());
-    TxExecution s14 = executeEventAsync(s13.getContractCallback());
-
-    // Cancel the A -> B lock.
-    blockchain.executeEvent(s14.getSpawnedEvents().get(0));
+    // Check for no locks, and no tokens taken from the user
     Assertions.assertThat(getSwapState(swapLockContractAddressAandB).virtualState().locks())
         .hasSize(0);
-
-    // Cancel the B -> D lock.
-    TxExecution s15 = executeEventAsync(s14.getSpawnedEvents().get(1));
     Assertions.assertThat(getSwapState(swapLockContractAddressBandD).virtualState().locks())
         .hasSize(0);
-
-    // Handle callback to allow router to throw error.
-    TxExecution s16 = executeEventAsync(s15.getSystemCallback());
-    blockchain.executeEvent(s16.getContractCallback());
-    Assertions.assertThat(s16.getContractCallback().getFailureCause().getErrorMessage())
-        .contains("Could not acquire all locks in route.");
+    Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
+        .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
   }
 
   /** If a user provides an empty swap route, the swap is rejected. */
@@ -872,7 +917,8 @@ public abstract class RoutingTest extends JunitContractTest {
                     nonOwnerAddress1,
                     routerContract,
                     SwapRouter.routeSwap(
-                        swapRoute, contractTokenA, contractTokenB, NON_OWNER_TOKEN_AMOUNT_A, ZERO)))
+                        swapRoute, contractTokenA, contractTokenB, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+                    swapRouteGasAmount))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("The given route is empty.");
   }
@@ -892,7 +938,8 @@ public abstract class RoutingTest extends JunitContractTest {
             nonOwnerAddress1,
             routerContract,
             SwapRouter.routeSwap(
-                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO));
+                swapRoute, contractTokenA, contractTokenD, NON_OWNER_TOKEN_AMOUNT_A, ZERO),
+            swapRouteGasAmount);
 
     // Execute user -> router interaction.
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
@@ -934,7 +981,8 @@ public abstract class RoutingTest extends JunitContractTest {
                 contractTokenA,
                 contractTokenD,
                 NON_OWNER_TOKEN_AMOUNT_A.add(BigInteger.ONE), // 1 more token than owned.
-                ZERO));
+                ZERO),
+            swapRouteGasAmount);
 
     // Execute user -> router interaction.
     TxExecution s2 = executeEventAsync(s1.getContractInteraction());
@@ -952,6 +1000,152 @@ public abstract class RoutingTest extends JunitContractTest {
     blockchain.executeEvent(s4.getContractCallback());
     Assertions.assertThat(s4.getContractCallback().getFailureCause().getErrorMessage())
         .contains("Could not take control of tokens.");
+  }
+
+  /**
+   * If a user provides too little gas to execute the whole swap-chain, routing exits early, without
+   * acquiring locks.
+   */
+  @RepeatedTest(10)
+  @Previous("contractInit")
+  void tooLittleGas(RepetitionInfo repetitionInfo) {
+    initializeTestMappings();
+    BlockchainAddress routeUser = blockchain.newAccount(66);
+
+    RandomRouteInfo randomRoute = generateRandomRoutes(repetitionInfo, 1, 4).get(0);
+    final long tooLittleGas = 87250;
+
+    blockchain.sendAction(
+        contractOwnerAddress,
+        randomRoute.initialToken,
+        Token.transfer(routeUser, randomRoute.initialAmount));
+
+    blockchain.sendAction(
+        routeUser,
+        randomRoute.initialToken,
+        Token.approve(routerContract, randomRoute.initialAmount));
+
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    routeUser,
+                    routerContract,
+                    SwapRouter.routeSwap(
+                        randomRoute.swapRoute,
+                        randomRoute.initialToken,
+                        randomRoute.finalToken,
+                        randomRoute.initialAmount,
+                        BigInteger.ONE),
+                    tooLittleGas))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("Cannot allocate gas for events.");
+
+    // No locks exist at the swap contracts.
+    for (BlockchainAddress swapOnRoute : randomRoute.swapRoute) {
+      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks()).isEmpty();
+    }
+
+    // Tokens haven't moved.
+    Assertions.assertThat(getTokenBalance(randomRoute.initialToken, routeUser))
+        .isEqualTo(randomRoute.initialAmount);
+
+    // Executing the route with a little more gas fully succeeds.
+    blockchain.sendAction(
+        routeUser,
+        routerContract,
+        SwapRouter.routeSwap(
+            randomRoute.swapRoute,
+            randomRoute.initialToken,
+            randomRoute.finalToken,
+            randomRoute.initialAmount,
+            BigInteger.ONE),
+        tooLittleGas + 250);
+
+    assertTokenBalanceMarginEntry(randomRoute.finalToken, routeUser, randomRoute.expectedOutput, 1);
+  }
+
+  /** If a user provides a route exceeding the maximum supported length, no locks are acquired. */
+  @RepeatedTest(10)
+  @Previous("contractInit")
+  void tooLongRoute(RepetitionInfo repetitionInfo) {
+    initializeTestMappings();
+    BlockchainAddress routeUser = blockchain.newAccount(77);
+    RandomRouteInfo randomRoute =
+        generateRandomRoutes(repetitionInfo, 1, MAX_ROUTE_LENGTH + 1).get(0);
+
+    blockchain.sendAction(
+        contractOwnerAddress,
+        randomRoute.initialToken,
+        Token.transfer(routeUser, randomRoute.initialAmount));
+
+    blockchain.sendAction(
+        routeUser,
+        randomRoute.initialToken,
+        Token.approve(routerContract, randomRoute.initialAmount));
+
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    routeUser,
+                    routerContract,
+                    SwapRouter.routeSwap(
+                        randomRoute.swapRoute,
+                        randomRoute.initialToken,
+                        randomRoute.finalToken,
+                        randomRoute.initialAmount,
+                        BigInteger.ONE),
+                    swapRouteGasAmount))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining(
+            "Swap route length (%s) is greater than maximum allowed (%s).",
+            randomRoute.swapRoute.size(), randomRoute.swapRoute.size() - 1);
+
+    // No locks exist at the swap contracts.
+    for (BlockchainAddress swapOnRoute : randomRoute.swapRoute) {
+      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks()).isEmpty();
+    }
+
+    // Tokens haven't moved.
+    Assertions.assertThat(getTokenBalance(randomRoute.initialToken, routeUser))
+        .isEqualTo(randomRoute.initialAmount);
+  }
+
+  /**
+   * A user can provide the router with a valid swap route of maximum allowed length, which results
+   * in the router performing swaps along the route, and the user ending up with the desired output
+   * tokens.
+   */
+  @RepeatedTest(10)
+  @Previous("contractInit")
+  void swapRouteMaxLength(RepetitionInfo repetitionInfo) {
+    initializeTestMappings();
+    final BlockchainAddress routeUser = blockchain.newAccount(88);
+    RandomRouteInfo randomRoute = generateRandomRoutes(repetitionInfo, 1, MAX_ROUTE_LENGTH).get(0);
+
+    blockchain.sendAction(
+        contractOwnerAddress,
+        randomRoute.initialToken,
+        Token.transfer(routeUser, randomRoute.initialAmount));
+
+    blockchain.sendAction(
+        routeUser,
+        randomRoute.initialToken,
+        Token.approve(routerContract, randomRoute.initialAmount));
+
+    final TxExecution s1 =
+        blockchain.sendActionAsync(
+            routeUser,
+            routerContract,
+            SwapRouter.routeSwap(
+                randomRoute.swapRoute,
+                randomRoute.initialToken,
+                randomRoute.finalToken,
+                randomRoute.initialAmount,
+                BigInteger.ONE),
+            110_000L);
+    executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1));
+
+    assertTokenBalanceMarginEntry(randomRoute.finalToken, routeUser, randomRoute.expectedOutput, 1);
   }
 
   private void approveExtraNonOwnersA() {
@@ -1105,7 +1299,7 @@ public abstract class RoutingTest extends JunitContractTest {
             swapLockContractAddressDandF, contractTokenD, contractTokenF));
   }
 
-  void depositIntoSwap(
+  private void depositIntoSwap(
       BlockchainAddress swapContract,
       BlockchainAddress sender,
       BlockchainAddress contractToken,
@@ -1114,27 +1308,27 @@ public abstract class RoutingTest extends JunitContractTest {
     blockchain.sendAction(sender, swapContract, LiquiditySwapLock.deposit(contractToken, amount));
   }
 
-  SwapRouter.RouterState getRouterState() {
+  private SwapRouter.RouterState getRouterState() {
     return SwapRouter.RouterState.deserialize(blockchain.getContractState(routerContract));
   }
 
-  LiquiditySwapLock.LiquiditySwapContractState getSwapState(BlockchainAddress swapContract) {
+  private LiquiditySwapLock.LiquiditySwapContractState getSwapState(
+      BlockchainAddress swapContract) {
     return LiquiditySwapLock.LiquiditySwapContractState.deserialize(
         blockchain.getContractState(swapContract));
   }
 
-  Token.TokenState getTokenState(BlockchainAddress tokenContract) {
-    return Token.TokenState.deserialize(blockchain.getContractState(tokenContract));
-  }
+  protected abstract BigInteger getTokenBalance(
+      BlockchainAddress tokenContract, BlockchainAddress key);
 
-  BigInteger calculateReceivingAmount(
+  private BigInteger calculateReceivingAmount(
       BlockchainAddress swapContract, BlockchainAddress fromToken, BigInteger amount, short fee) {
     BigInteger a = calculateReceivingAmountNoLock(swapContract, fromToken, amount, fee);
     BigInteger b = calculateReceivingAmountLocked(swapContract, fromToken, amount, fee);
     return a.min(b);
   }
 
-  BigInteger calculateReceivingAmountNoLock(
+  private BigInteger calculateReceivingAmountNoLock(
       BlockchainAddress swapContract, BlockchainAddress fromToken, BigInteger amount, short fee) {
     BigInteger oldFromAmount = getPoolAmountForToken(swapContract, fromToken);
     BigInteger oldToAmount =
@@ -1143,7 +1337,7 @@ public abstract class RoutingTest extends JunitContractTest {
     return deltaCalculation(amount, oldFromAmount, oldToAmount, fee);
   }
 
-  BigInteger calculateReceivingAmountLocked(
+  private BigInteger calculateReceivingAmountLocked(
       BlockchainAddress swapContract, BlockchainAddress fromToken, BigInteger amount, short fee) {
     BigInteger oldFromAmount = getVirtualPoolAmountForToken(swapContract, fromToken);
     BigInteger oldToAmount =
@@ -1152,7 +1346,7 @@ public abstract class RoutingTest extends JunitContractTest {
     return deltaCalculation(amount, oldFromAmount, oldToAmount, fee);
   }
 
-  BigInteger deltaCalculation(
+  private BigInteger deltaCalculation(
       BigInteger deltaInAmount, BigInteger fromAmount, BigInteger toAmount, short fee) {
     BigInteger noFee = BigInteger.valueOf(1000);
     BigInteger oppositeFee = noFee.subtract(BigInteger.valueOf(fee));
@@ -1175,11 +1369,11 @@ public abstract class RoutingTest extends JunitContractTest {
     return deduceLeftOrRightToken(swapContract, token) ? b.aTokens() : b.bTokens();
   }
 
-  LiquiditySwapLock.TokenBalance getActualContractBalance(BlockchainAddress swapContract) {
+  private LiquiditySwapLock.TokenBalance getActualContractBalance(BlockchainAddress swapContract) {
     return swapUtil.getActualContractBalance(getSwapState(swapContract), swapContract);
   }
 
-  LiquiditySwapLock.TokenBalance getVirtualContractBalance(BlockchainAddress swapContract) {
+  private LiquiditySwapLock.TokenBalance getVirtualContractBalance(BlockchainAddress swapContract) {
     return swapUtil.getVirtualContractBalance(getSwapState(swapContract), swapContract);
   }
 
@@ -1214,13 +1408,6 @@ public abstract class RoutingTest extends JunitContractTest {
     }
   }
 
-  LiquiditySwapLock.TokensInOut tokenAinBout() {
-    return new LiquiditySwapLock.TokensInOut(
-        new LiquiditySwapLock.Token.TokenA(), new LiquiditySwapLock.Token.TokenB());
-  }
-
-  record TxExecutionEvent(TxExecution event, int id, Integer originator) {}
-
   /**
    * Executes the subtree TxExecution by the given TxExecution event in an arbitrary and
    * unpredictable order. This helps in finding invalid assumptions in the contract code about the
@@ -1231,58 +1418,8 @@ public abstract class RoutingTest extends JunitContractTest {
    */
   private void executeTxExecutionInUnpredictableOrder(
       RepetitionInfo repetitionInfo, List<TxExecution> initialTxExecution) {
-    final Random random = new Random(repetitionInfo.getCurrentRepetition());
-    final ArrayList<TxExecutionEvent> queuedEvents = new ArrayList<>();
-    int idCounter = 0;
-
-    for (final TxExecution txExecution : initialTxExecution) {
-      for (final var e : txExecution.getSpawnedEvents()) {
-        queuedEvents.add(new TxExecutionEvent(e, idCounter++, null));
-      }
-    }
-
-    while (!queuedEvents.isEmpty()) {
-      // Execute event from queue
-      final TxExecutionEvent txExecutionEvent = queuedEvents.remove(queuedEvents.size() - 1);
-      final var event = txExecutionEvent.event();
-      final TxExecution txExecution = executeEventAsync(event);
-      final String contractName = contractName(event.getEvent().getEvent().getInner().target());
-
-      if (!event.isSuccess()) {
-        throw new RuntimeException(
-            "Event %s (from %s) failed to %s: %s"
-                .formatted(
-                    txExecutionEvent.id(),
-                    txExecutionEvent.originator(),
-                    contractName,
-                    event.getFailureCause().getErrorMessage()));
-      }
-
-      // Queue new events
-      final List<TxExecution> newEvents = txExecution.getSpawnedEvents();
-      if (!newEvents.isEmpty()) {
-        for (final var e : newEvents) {
-          queuedEvents.add(new TxExecutionEvent(e, idCounter++, txExecutionEvent.id()));
-        }
-
-        Collections.shuffle(queuedEvents, random);
-      }
-    }
-  }
-
-  private String contractName(BlockchainAddress target) {
-    try {
-      for (final var field : RoutingTest.class.getDeclaredFields()) {
-        field.setAccessible(true);
-        final Object fieldValue = field.get(this);
-        if (target.equals(fieldValue)) {
-          return field.getName();
-        }
-      }
-    } catch (IllegalAccessException e) {
-      return "UNKNOWN";
-    }
-    return "UNKNOWN";
+    ExecutionUtil.executeTxExecutionInUnpredictableOrder(this, repetitionInfo, initialTxExecution)
+        .assertNoFailures();
   }
 
   private void assertTokenBalanceMarginEntry(
@@ -1290,9 +1427,7 @@ public abstract class RoutingTest extends JunitContractTest {
       BlockchainAddress owner,
       BigInteger amount,
       double percentage) {
-    Token.TokenState state = getTokenState(tokenContract);
-    Assertions.assertThat(state.balances()).containsKey(owner);
-    BigInteger balance = state.balances().get(owner);
+    final BigInteger balance = getTokenBalance(tokenContract, owner);
     Assertions.assertThat(balance).isCloseTo(amount, Percentage.withPercentage(percentage));
   }
 
@@ -1316,7 +1451,7 @@ public abstract class RoutingTest extends JunitContractTest {
     listOfTokensForRandom = List.of(contractTokenA, contractTokenB, contractTokenC, contractTokenD);
   }
 
-  record RandomRouteInfo(
+  private record RandomRouteInfo(
       List<BlockchainAddress> swapRoute,
       BlockchainAddress initialToken,
       BlockchainAddress finalToken,
@@ -1324,7 +1459,7 @@ public abstract class RoutingTest extends JunitContractTest {
       BigInteger expectedOutput) {}
 
   private List<RandomRouteInfo> generateRandomRoutes(
-      final RepetitionInfo repetitionInfo, int numberOfRoutes, int routeLength) {
+      final RepetitionInfo repetitionInfo, int numberOfRoutes, int numberOfSwaps) {
     final Random random = new Random(repetitionInfo.getCurrentRepetition());
     List<RandomRouteInfo> randomRoutes = new ArrayList<>(numberOfRoutes);
 
@@ -1338,7 +1473,7 @@ public abstract class RoutingTest extends JunitContractTest {
 
       List<BlockchainAddress> swapRoute = new ArrayList<>();
 
-      for (int j = 0; j < routeLength; j++) {
+      for (int j = 0; j < numberOfSwaps; j++) {
         List<BlockchainAddress> possibleSwaps = tokensToSwapForRandom.get(currentToken);
 
         int randSwapIndex = random.nextInt(possibleSwaps.size());

@@ -3,13 +3,12 @@
 
 #[macro_use]
 extern crate pbc_contract_codegen;
-extern crate pbc_contract_common;
 
 use create_type_spec_derive::CreateTypeSpec;
 use pbc_contract_common::address::Address;
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
 use pbc_traits::WriteRPC;
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
@@ -63,7 +62,7 @@ pub struct SwapFactoryState {
     /// Permission indicating who are allowed to deploy new swap contracts.
     pub permission_deploy_swap: Permission,
     /// Deployed swap contracts.
-    pub swap_contracts: SortedVecMap<Address, SwapContractInfo>,
+    pub swap_contracts: AvlTreeMap<Address, SwapContractInfo>,
     /// Deployment information for new swap contract.
     pub swap_contract_binary: Option<deploy::DeployableContract>,
     /// Swap fee for new contracts.
@@ -90,7 +89,7 @@ pub fn initialize(
     SwapFactoryState {
         permission_update_swap,
         permission_deploy_swap,
-        swap_contracts: SortedVecMap::new(),
+        swap_contracts: AvlTreeMap::new(),
         swap_contract_binary: None,
         swap_fee_per_mille,
     }
@@ -248,11 +247,11 @@ pub fn swap_contract_exists_callback(
     if !callback_ctx.results[0].succeeded {
         state.swap_contracts.remove(&swap_address);
     } else {
+        let mut swap_contract_info = state.swap_contracts.get(&swap_address).unwrap();
+        swap_contract_info.successfully_deployed = true;
         state
             .swap_contracts
-            .get_mut(&swap_address)
-            .unwrap()
-            .successfully_deployed = true;
+            .insert(swap_address, swap_contract_info);
     }
     state
 }

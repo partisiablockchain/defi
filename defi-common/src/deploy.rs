@@ -22,7 +22,7 @@ const ADDRESS_DEPLOY_PUBLIC: Address = Address {
 /// monotonically increasing.
 pub type ContractVersion = u64;
 
-/// [`Shortname`] for invoking public deployment on [`ADDRESS_DEPLOY_PUB`].
+/// [`Shortname`] for invoking public deployment on [`ADDRESS_DEPLOY_PUBLIC`].
 const SHORTNAME_DEPLOY_PUB: Shortname = Shortname::from_u32(0x01);
 
 /// The magic bytes at the start of any given WASM file.

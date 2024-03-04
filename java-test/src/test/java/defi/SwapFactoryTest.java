@@ -191,9 +191,6 @@ public final class SwapFactoryTest extends JunitContractTest {
         .isEqualTo(new BigInteger("335160658106955"));
   }
 
-  // TODO: Need check that swap_contract_exists_callback is called when
-  // failing.
-
   @ContractTest(previous = "performSwap")
   void failWhenVersionsArentIncreasing() {
     assertThatCode(

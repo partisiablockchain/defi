@@ -1,5 +1,5 @@
 [package]
-name = "zk-liquidity-swap"
+name = "mocca"
 readme = "README.md"
 version.workspace = true
 description.workspace = true
@@ -9,18 +9,8 @@ documentation.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[features]
-abi = ["pbc_contract_common/abi", "pbc_contract_codegen/abi", "pbc_traits/abi", "create_type_spec_derive/abi", "defi_common/abi"]
-
 [lib]
-path = "src/contract.rs"
 crate-type = ['rlib', 'cdylib']
-
-[package.metadata.zk]
-zk-compute-path = "src/zk_compute.rs"
-
-[dev-dependencies]
-proptest = "1.4.0"
 
 [dependencies]
 pbc_contract_common.workspace = true
@@ -30,5 +20,7 @@ read_write_rpc_derive.workspace = true
 read_write_state_derive.workspace = true
 create_type_spec_derive.workspace = true
 pbc_contract_codegen.workspace = true
-pbc_zk.workspace = true
 defi_common = { path = "../defi-common" }
+
+[features]
+abi = ["pbc_contract_common/abi", "pbc_contract_codegen/abi", "pbc_traits/abi", "create_type_spec_derive/abi", "defi_common/abi"]

@@ -5,15 +5,14 @@ mod tests;
 
 #[macro_use]
 extern crate pbc_contract_codegen;
-extern crate core;
 
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
-use pbc_contract_common::sorted_vec_map::SortedVecMap;
 use std::ops::RangeInclusive;
 
 use create_type_spec_derive::CreateTypeSpec;
+use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use read_write_state_derive::ReadWriteState;
 
 use defi_common::interact_mpc20;
@@ -37,14 +36,39 @@ pub struct LiquidityLock {
     owner: Address,
 }
 
+/// Type representing difference in [`TokenAmount`]
+type TokenDelta = i128;
+
+/// Keeps track of the 'virtual' liquidity that is held in locks.
+#[derive(CreateTypeSpec, ReadWriteState)]
+struct LockLiquidity {
+    /// Amount of liquidity of A tokens held in locks.
+    pub a_tokens: TokenDelta,
+    /// Amount of liquidity of B tokens held in locks.
+    pub b_tokens: TokenDelta,
+}
+
+impl LockLiquidity {
+    /// Retrieves a mutable reference to the amount of `token` held in locks.
+    pub fn get_mut_amount_of(&mut self, token: Token) -> &mut TokenDelta {
+        if token == Token::A {
+            &mut self.a_tokens
+        } else {
+            &mut self.b_tokens
+        }
+    }
+}
+
 /// The virtual states manages the virtual liquidity pools and any locks.
 #[derive(ReadWriteState, CreateTypeSpec)]
 pub struct VirtualState {
     /// Id used for the next acquired lock.
     next_lock_id: LiquidityLockId,
     /// Stores lock information needed to execute or cancel locks.
-    /// Implicitly defines the virtual state as the actual state plus the sum of the lock values.
-    locks: SortedVecMap<LiquidityLockId, LiquidityLock>,
+    locks: AvlTreeMap<LiquidityLockId, LiquidityLock>,
+    /// The sum total of the liquidity held in locks.
+    /// This must maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
+    lock_liquidity: LockLiquidity,
 }
 
 impl Default for VirtualState {
@@ -54,62 +78,81 @@ impl Default for VirtualState {
 }
 
 impl VirtualState {
-    /// A new virtual state contains no locks and starts `lock_id` at 0.
+    /// A new virtual state contains no locks and starts `lock_id` at the initial id.
     pub fn new() -> Self {
+        let lock_liquidity = LockLiquidity {
+            a_tokens: 0,
+            b_tokens: 0,
+        };
         Self {
             next_lock_id: LiquidityLockId::initial_id(),
-            locks: SortedVecMap::new(),
+            locks: AvlTreeMap::new(),
+            lock_liquidity,
         }
     }
 
-    /// Adds a `lock` to the virtual state, implicitly updating the virtual state as if the swap has happened.
+    /// Adds `lock` to the virtual state, updating the virtual state as if the swap has happened.
     ///
-    /// Will associate the next unique lock id with the `lock`, which is returned.
+    /// The next unique lock id will be associated with `lock` and returned.
+    /// Updates the lock liquidity based on `lock` input and output amounts,
+    /// to maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
     fn add_lock(&mut self, lock: LiquidityLock) -> LiquidityLockId {
         let lock_id = self.next_lock_id();
+
+        *self
+            .lock_liquidity
+            .get_mut_amount_of(lock.tokens_in_out.token_in) += lock.amount_in as TokenDelta;
+        *self
+            .lock_liquidity
+            .get_mut_amount_of(lock.tokens_in_out.token_out) -= lock.amount_out as TokenDelta;
+
         self.locks.insert(lock_id, lock);
 
         lock_id
     }
 
     /// Removes a lock from the virtual state, if `lock_id` is a valid id, and associated with `sender`.
+    ///
+    /// Removing the lock also updates the virtual liquidity state, based on the input and output amounts,
+    /// to maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
     fn remove_lock(&mut self, lock_id: LiquidityLockId, sender: Address) -> LiquidityLock {
-        let lock = self.remove_lock_internal(lock_id);
+        let lock = self
+            .locks
+            .get(&lock_id)
+            .unwrap_or_else(|| panic!("{:?} is not a valid lock id.", lock_id));
         assert_eq!(
             sender, lock.owner,
             "Permission denied to handle lockID {:?}.",
             lock_id
         );
+
+        self.locks.remove(&lock_id);
+
+        *self
+            .lock_liquidity
+            .get_mut_amount_of(lock.tokens_in_out.token_in) -= lock.amount_in as TokenDelta;
+        *self
+            .lock_liquidity
+            .get_mut_amount_of(lock.tokens_in_out.token_out) += lock.amount_out as TokenDelta;
+
         lock
     }
 
-    /// Removes a lock from the virtual state, if `lock_id` is a valid id.
-    fn remove_lock_internal(&mut self, lock_id: LiquidityLockId) -> LiquidityLock {
-        self.locks
-            .remove(&lock_id)
-            .unwrap_or_else(|| panic!("{:?} is not a valid lock id.", lock_id))
-    }
-
-    /// Returns the virtual pool state, which is `actual_a` + sum(lock_a), `actual_b` + sum(lock_b).
-    ///
-    /// Expired locks do not contribute, and are subsequently removed from the state.
+    /// Returns the virtual pool state, guaranteed to be `actual_a` + sum(lock_a), `actual_b` + sum(lock_b).
     fn virtual_liquidity_pools(
         &mut self,
         actual_a: TokenAmount,
         actual_b: TokenAmount,
     ) -> TokenBalance {
-        let mut res = TokenBalance {
-            a_tokens: actual_a,
-            b_tokens: actual_b,
+        TokenBalance {
+            a_tokens: actual_a
+                .checked_add_signed(self.lock_liquidity.a_tokens)
+                .unwrap(),
+            b_tokens: actual_b
+                .checked_add_signed(self.lock_liquidity.b_tokens)
+                .unwrap(),
             liquidity_tokens: 0,
-        };
-
-        for lock in self.locks.values() {
-            *res.get_mut_amount_of(lock.tokens_in_out.token_in) += lock.amount_in;
-            *res.get_mut_amount_of(lock.tokens_in_out.token_out) -= lock.amount_out;
         }
-
-        res
     }
 
     /// Returns an id for a requested lock, and updates state for a future lock id.
@@ -130,7 +173,7 @@ impl VirtualState {
 /// The #\[state\] macro generates serialization logic for the struct.
 #[state]
 pub struct LiquiditySwapContractState {
-    /// Who is allowed to acquired locks.
+    /// Determines which callers are allowed to acquired locks.
     pub permission_lock_swap: Permission,
     /// The address of this contract
     pub liquidity_pool_address: Address,
@@ -148,7 +191,7 @@ impl LiquiditySwapContractState {
     ///
     /// ### Parameters:
     ///
-    ///  * `state`: [`&LiquiditySwapContractState`] - A reference to the current state of the contract.
+    ///  * `state`: [`LiquiditySwapContractState`] - A reference to the current state of the contract.
     ///
     /// ### Returns:
     /// True if the pools have liquidity, false otherwise [`bool`]
@@ -166,15 +209,15 @@ impl LiquiditySwapContractState {
 ///
 ///   * `context`: [`ContractContext`] - The contract context containing sender and chain information.
 ///
+///   * `permission_lock_swap`: [`Permission`] - Determines which callers are allowed to acquired locks.
+///
 ///   * `token_a_address`: [`Address`] - The address of token A.
 ///
 ///   * `token_b_address`: [`Address`] - The address of token B.
 ///
 ///   * `swap_fee_per_mille`: [`TokenAmount`] - The fee for swapping, in per mille, i.e. a fee set to 3 corresponds to a fee of 0.3%.
 ///
-///
 /// The new state object of type [`LiquiditySwapContractState`] with all address fields initialized to their final state and remaining fields initialized to a default value.
-///
 #[init]
 pub fn initialize(
     context: ContractContext,
@@ -817,7 +860,7 @@ fn calculate_reclaim_output(
 ///
 ///  * `state`: [`LiquiditySwapContractState`] - The current state of the contract.
 ///
-/// * `user`: [`&Address`] - The address of the user providing liquidity.
+/// * `user`: [`Address`] - The address of the user providing liquidity.
 ///
 /// * `token_in`: [`Address`] - The address of the token being token_in.
 ///
