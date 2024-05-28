@@ -28,7 +28,7 @@ use defi_common::token_balances::{TokenAmount, TokenBalance, TokenBalances, Toke
 pub const ALLOWED_FEE_PER_MILLE: RangeInclusive<u16> = 0..=1000;
 
 /// Stores data about a lock, which is later used when the lock is executed or cancelled.
-#[derive(ReadWriteState, CreateTypeSpec, Debug)]
+#[derive(ReadWriteState, CreateTypeSpec)]
 pub struct LiquidityLock {
     amount_in: TokenAmount,
     amount_out: TokenAmount,

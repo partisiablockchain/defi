@@ -148,7 +148,7 @@ impl Proposal {
 }
 
 /// The types of proposals that can be voted on.
-#[derive(CreateTypeSpec, ReadWriteState, ReadWriteRPC, Clone)]
+#[derive(CreateTypeSpec, ReadWriteState, ReadWriteRPC)]
 pub enum ProposalType {
     /// `Transfer`
     #[discriminant(0)]

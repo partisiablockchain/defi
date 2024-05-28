@@ -319,10 +319,13 @@ pub fn swap(
         "Balances are both zero; nothing to swap with."
     );
 
-    let input_def = ZkInputDef::with_metadata(SecretVarMetadata {
-        only_if_at_front,
-        is_output_variable: false,
-    });
+    let input_def = ZkInputDef::with_metadata(
+        Some(SHORTNAME_SWAP_VARIABLE_INPUTTED),
+        SecretVarMetadata {
+            only_if_at_front,
+            is_output_variable: false,
+        },
+    );
     (state, vec![], input_def)
 }
 
@@ -338,7 +341,7 @@ fn start_next_in_queue(state: &ContractState, zk_events: &mut Vec<ZkStateChange>
 ///
 /// Will create a new worklist entry, and possibly start computation, if no previous computation is
 /// active.
-#[zk_on_variable_inputted]
+#[zk_on_variable_inputted(shortname = 0x08)]
 pub fn swap_variable_inputted(
     _context: ContractContext,
     mut state: ContractState,
@@ -372,7 +375,7 @@ pub fn swap_variable_inputted(
 }
 
 /// Will immediately open the result of the computation.
-#[zk_on_compute_complete]
+#[zk_on_compute_complete(shortname = 0x09)]
 pub fn computation_complete(
     _context: ContractContext,
     state: ContractState,

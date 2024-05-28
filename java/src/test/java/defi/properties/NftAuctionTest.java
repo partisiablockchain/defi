@@ -11,6 +11,7 @@ import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
+import com.partisiablockchain.language.testenvironment.TxExecution;
 import java.math.BigInteger;
 
 /** Test suite for the {@link NftAuction} smart contract. */
@@ -84,6 +85,13 @@ public abstract class NftAuctionTest extends JunitContractTest {
     NftContract.NFTContractState nftState =
         NftContract.NFTContractState.deserialize(blockchain.getContractState(nft));
     assertThat(nftState.owners().get(nftId)).isEqualTo(auctionOwner);
+    assertThat(nftState.name()).isEqualTo("Disinterested Monkey Boat Association");
+    assertThat(nftState.symbol()).isEqualTo("DMBA");
+    assertThat(nftState.tokenApprovals()).isEmpty();
+    assertThat(nftState.operatorApprovals()).isEmpty();
+    assertThat(nftState.uriTemplate()).isEmpty();
+    assertThat(nftState.tokenUriDetails()).containsEntry(nftId, nftUri);
+    assertThat(nftState.contractOwner()).isEqualTo(auctionOwner);
 
     // deploy the auction contract
     byte[] auctionInitRpc =
@@ -125,6 +133,64 @@ public abstract class NftAuctionTest extends JunitContractTest {
     auctionState =
         NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
     assertThat(auctionState.status()).isEqualTo(BIDDING);
+  }
+
+  /**
+   * If the owner did not approve the auction contract to transfer the NFT, starting the auction
+   * fails .
+   */
+  @ContractTest
+  void startWithoutApprove() {
+    // instantiate accounts
+    ownerDoge = blockchain.newAccount(2);
+    auctionOwner = blockchain.newAccount(4);
+    byte[] nftUri = new byte[16];
+
+    // deploy token contracts
+    byte[] dogeInitRpc =
+        Token.initialize("Doge Coin", "DOGE", (byte) 18, BigInteger.valueOf(DOGE_SUPPLY));
+    doge = blockchain.deployContract(ownerDoge, contractBytesToken, dogeInitRpc);
+
+    byte[] nftInitRpc = NftContract.initialize("Disinterested Monkey Boat Association", "DMBA", "");
+    nft = blockchain.deployContract(auctionOwner, contractBytesNft, nftInitRpc);
+
+    // transfer the NFT to the contract owner
+    byte[] mintRpc = NftContract.mint(auctionOwner, nftId, nftUri);
+    blockchain.sendAction(auctionOwner, nft, mintRpc);
+
+    // deploy the auction contract
+    byte[] auctionInitRpc =
+        NftAuction.initialize(nft, nftId, doge, BigInteger.valueOf(20), BigInteger.valueOf(5), 2);
+
+    auction = blockchain.deployContract(auctionOwner, contractBytesAuction, auctionInitRpc);
+
+    // start the auction, WITHOUT the NFT owner approving the auction contract.
+    byte[] startRpc = NftAuction.start();
+
+    // Send interaction to auction contract.
+    TxExecution t1 = blockchain.sendActionAsync(auctionOwner, auction, startRpc);
+
+    // Process interaction to auction contract.
+    TxExecution t2 = t1.getContractInteraction();
+    blockchain.executeEventAsync(t2);
+
+    // Process the interaction between the auction and nft contract, which fails.
+    TxExecution t3 = t2.getContractInteraction();
+    blockchain.executeEventAsync(t3);
+
+    // Transfer from fails, which should lead to an error in the callback.
+    assertThat(t3.getFailureCause().getErrorMessage())
+        .contains("MPC-721: transfer caller is not owner nor approved");
+
+    // Process the system callback.
+    TxExecution t4 = t3.getSystemCallback();
+    blockchain.executeEventAsync(t4);
+    // Process the final contract callback.
+    blockchain.executeEvent(t4.getContractCallback());
+
+    // Check that the final error is as expected
+    assertThat(t4.getContractCallback().getFailureCause().getErrorMessage())
+        .contains("Transfer event did not succeed for start");
   }
 
   /** The highest bid is registered as highest bid. */

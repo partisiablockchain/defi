@@ -200,13 +200,38 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Deploy token contracts.
     initializeTokenContracts(contractOwnerAddress);
 
-    byte[] initRpcSwapAtoB =
+    byte[] initRpcAccountA =
         LiquiditySwapLock.initialize(
             nonOwnerAddress1, contractTokenB, FEE, new LiquiditySwapLock.Permission.Anybody());
     Assertions.assertThatCode(
+            () -> blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcAccountA))
+        .hasMessageContaining("Token address A must be a contract address");
+
+    // Cover both sides.
+    byte[] initRpcAccountB =
+        LiquiditySwapLock.initialize(
+            contractTokenA, nonOwnerAddress1, FEE, new LiquiditySwapLock.Permission.Anybody());
+    Assertions.assertThatCode(
+            () -> blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcAccountB))
+        .hasMessageContaining("Token address B must be a contract address");
+  }
+
+  /** The contract cannot be deployed with a duplicate token contract. */
+  @ContractTest
+  void deployDuplicateToken() {
+    contractOwnerAddress = blockchain.newAccount(3);
+    nonOwnerAddress1 = blockchain.newAccount(5);
+
+    // Deploy token contracts.
+    initializeTokenContracts(contractOwnerAddress);
+
+    byte[] initRpcSwapAtoB =
+        LiquiditySwapLock.initialize(
+            contractTokenA, contractTokenA, FEE, new LiquiditySwapLock.Permission.Anybody());
+    Assertions.assertThatCode(
             () -> blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwapAtoB))
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Token address A must be a contract address");
+        .hasMessageContaining("Tokens A and B must not be the same contract");
   }
 
   /**
@@ -299,6 +324,26 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Check that the final error is as expected
     Assertions.assertThat(s4.getContractCallback().getFailureCause().getErrorMessage())
         .contains("Transfer did not succeed");
+  }
+
+  /** If a user tries to deposit a token which doesn't match the swap tokens, deposit fails. */
+  @ContractTest(previous = "contractInit")
+  void depositUnknownToken() {
+    BigInteger depositAmount = NON_OWNER_TOKEN_AMOUNT_A;
+
+    // First approve
+    blockchain.sendAction(
+        nonOwnerAddress1,
+        contractTokenA,
+        Token.approve(swapLockContractAddressAtoB, depositAmount));
+
+    Assertions.assertThatThrownBy(
+            () ->
+                blockchain.sendAction(
+                    nonOwnerAddress1,
+                    swapLockContractAddressBtoC,
+                    LiquiditySwapLock.deposit(contractTokenA, depositAmount)))
+        .hasMessageContaining("token_in invalid token address");
   }
 
   /** A user can acquire a lock, which updates the virtual balances of the contract. */

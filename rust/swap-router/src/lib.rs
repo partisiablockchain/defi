@@ -271,9 +271,7 @@ impl RouteTracker {
     ///
     /// Panics if no route is associated with `route_id`.
     fn get_route(&self, route_id: RouteId) -> RouteInformation {
-        self.active_routes
-            .get(&route_id)
-            .unwrap_or_else(|| panic!("Route {} doesn't exist.", route_id))
+        self.active_routes.get(&route_id).unwrap()
     }
 
     /// Retrieves and modifies the route for the given [`RouteId`]. Can produce a return value.

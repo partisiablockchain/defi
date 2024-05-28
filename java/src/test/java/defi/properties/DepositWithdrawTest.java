@@ -267,7 +267,7 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
 
       final byte[] rpc;
       if (movement.compareTo(BigInteger.ZERO) < 0) {
-        rpc = LiquiditySwap.withdraw(contractTokenA, movement.negate(), false);
+        rpc = LiquiditySwap.withdraw(contractTokenA, movement.negate(), true);
       } else {
         rpc = LiquiditySwap.deposit(contractTokenA, movement);
       }

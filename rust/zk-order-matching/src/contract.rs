@@ -206,11 +206,14 @@ pub fn place_order(
         "token_balances are both zero; nothing to placed_order with."
     );
 
-    let input_def = ZkInputDef::with_metadata(zk_compute::VarMetadata {
-        variable_type: zk_compute::VARIABLE_TYPE_ORDER,
-        deposit_amount_a: balance.a_tokens,
-        deposit_amount_b: balance.b_tokens,
-    });
+    let input_def = ZkInputDef::with_metadata(
+        Some(SHORTNAME_ORDER_VARIABLE_INPUTTED),
+        zk_compute::VarMetadata {
+            variable_type: zk_compute::VARIABLE_TYPE_ORDER,
+            deposit_amount_a: balance.a_tokens,
+            deposit_amount_b: balance.b_tokens,
+        },
+    );
     (state, vec![], input_def)
 }
 
@@ -244,6 +247,7 @@ pub fn start_next_order_in_queue(
         (Some(next_variable_id), _) => {
             vec![zk_compute::match_order_start(
                 next_variable_id,
+                Some(SHORTNAME_ORDER_MATCH_COMPLETE),
                 &zk_compute::VarMetadata {
                     variable_type: zk_compute::VARIABLE_TYPE_MATCH,
                     deposit_amount_a: 0,
@@ -255,7 +259,7 @@ pub fn start_next_order_in_queue(
 }
 
 /// Automatic callback for when [`place_order`] is finalized.
-#[zk_on_variable_inputted]
+#[zk_on_variable_inputted(shortname = 0x01)]
 pub fn order_variable_inputted(
     _context: ContractContext,
     mut state: ContractState,
@@ -269,7 +273,7 @@ pub fn order_variable_inputted(
 }
 
 /// Automatic callback for when [`start_next_order_in_queue`] is complete.
-#[zk_on_compute_complete]
+#[zk_on_compute_complete(shortname = 0x01)]
 pub fn order_match_complete(
     _context: ContractContext,
     state: ContractState,

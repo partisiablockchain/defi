@@ -1,0 +1,6 @@
+builds/partisiablockchain/language/contracts/defi/rust/defi-common/src/deploy.rs                # Missed coverage is only applicable for routing script, and only supported on testnet.
+builds/partisiablockchain/language/contracts/defi/rust/dex-swap-factory/src/lib.rs              # Missed coverage is only applicable for routing script, and only supported on testnet.
+builds/partisiablockchain/language/contracts/defi/rust/defi-common/src/math.rs                  # "Uncovered" function 'u128_division_ceil' is covered by rust tests and zk_liquidity_swap (where coverage is not supported).
+builds/partisiablockchain/language/contracts/defi/rust/zk-liquidity-swap/src/contract.rs        # REAL coverage not supported
+builds/partisiablockchain/language/contracts/defi/rust/zk-order-matching/src/contract.rs        # REAL coverage not supported
+builds/partisiablockchain/language/contracts/defi/rust/zk-order-matching/src/zk_compute.rs      # REAL coverage not supported
