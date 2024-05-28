@@ -50,9 +50,6 @@ impl MPC20Contract {
     /// Shortname of the [`MPC20Contract::approve`] invocation
     const SHORTNAME_APPROVE: Shortname = Shortname::from_u32(0x05);
 
-    /// Shortname of the [`MPC20Contract::approve_relative`] invocation
-    const SHORTNAME_APPROVE_RELATIVE: Shortname = Shortname::from_u32(0x07);
-
     /// Gas amount sufficient for [`MPC20Contract::transfer`] invocation.
     ///
     /// Guarantees that the invocation does not fail due to insufficient gas.
@@ -129,25 +126,6 @@ impl MPC20Contract {
             .argument(*approved)
             .argument(approval_amount)
             .with_cost(Self::GAS_COST_APPROVE)
-            .done();
-    }
-
-    /// Create an interaction with the `self` token contract, for approving an additional `approval_amount` of
-    /// tokens owned by the sender of the interaction, to be handled by the `approved` contract.
-    ///
-    /// Not part of the MPC20 standard, but a useful extension supported by the `token` and
-    /// `token-v2` contracts.
-    pub fn approve_relative(
-        &self,
-        event_group_builder: &mut EventGroupBuilder,
-        approved: &Address,
-        approval_amount: i128,
-    ) {
-        event_group_builder
-            .call(self.contract_address, Self::SHORTNAME_APPROVE_RELATIVE)
-            .argument(*approved)
-            .argument(approval_amount)
-            .with_cost(Self::GAS_COST_APPROVE_RELATIVE)
             .done();
     }
 }

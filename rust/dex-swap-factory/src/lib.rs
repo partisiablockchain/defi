@@ -16,31 +16,13 @@ use read_write_state_derive::ReadWriteState;
 use defi_common::deploy;
 use defi_common::permission::Permission;
 
-/// Swap pair.
-///
-/// ## Normalized form
-///
-/// - [`TokenPair::token_a_address`] must be [`Ord`]ered  before [`TokenPair::token_b_address`].
-///
-/// This normalization can be accomplished by calling [`TokenPair::normalize`].
+/// Pair of token contract addresses.
 #[derive(ReadRPC, ReadWriteState, CreateTypeSpec)]
 pub struct TokenPair {
     /// The first token address.
     pub token_a_address: Address,
     /// The second token address.
     pub token_b_address: Address,
-}
-
-impl TokenPair {
-    /// Performs the normalization mentioned in [`TokenPair`] documentation.
-    pub fn normalize(self) -> Self {
-        let mut tokens = [self.token_a_address, self.token_b_address];
-        tokens.sort();
-        Self {
-            token_a_address: tokens[0],
-            token_b_address: tokens[1],
-        }
-    }
 }
 
 /// Information about a deployed swap contract.
@@ -147,8 +129,6 @@ pub fn deploy_swap_contract(
     mut state: SwapFactoryState,
     token_pair: TokenPair,
 ) -> (SwapFactoryState, Vec<EventGroup>) {
-    let token_pair = token_pair.normalize();
-
     state
         .permission_deploy_swap
         .assert_permission_for(&ctx.sender, "deploy swap");
@@ -216,8 +196,6 @@ pub fn deploy_swap_lock_contract(
     token_pair: TokenPair,
     lock_permission: Permission,
 ) -> (SwapFactoryState, Vec<EventGroup>) {
-    let token_pair = token_pair.normalize();
-
     state
         .permission_deploy_swap
         .assert_permission_for(&ctx.sender, "deploy swap");

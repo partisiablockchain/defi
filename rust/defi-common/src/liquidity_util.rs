@@ -6,9 +6,7 @@ use read_write_rpc_derive::ReadWriteRPC;
 use read_write_state_derive::ReadWriteState;
 
 /// Id of a liquidity-lock.
-#[derive(
-    Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, ReadWriteRPC, ReadWriteState, CreateTypeSpec,
-)]
+#[derive(Copy, Clone, Debug, ReadWriteRPC, ReadWriteState, CreateTypeSpec)]
 pub struct LiquidityLockId {
     raw_id: u128,
 }

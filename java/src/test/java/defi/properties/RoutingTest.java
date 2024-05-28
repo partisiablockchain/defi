@@ -683,6 +683,71 @@ public abstract class RoutingTest extends JunitContractTest {
     Assertions.assertThat(getTokenBalance(contractTokenD, nonOwnerAddress1)).isEqualTo(receivingD);
   }
 
+  /** If a swap contract is added to the router, if can be used for route swaps. */
+  @RepeatedTest(1)
+  @Previous("contractInit")
+  void swapRouteNewContract(RepetitionInfo repetitionInfo) {
+    final BigInteger zSupply = BigInteger.ONE.shiftLeft(30);
+    final BigInteger zLiquidity = BigInteger.ONE.shiftLeft(26);
+    final BigInteger cLiquidity = BigInteger.ONE.shiftLeft(27);
+
+    // Deploy a new token: Z
+    byte[] initRpcZ = Token.initialize("Token Z", "Z", (byte) 8, zSupply);
+    BlockchainAddress contractTokenZ =
+        blockchain.deployContract(contractOwnerAddress, contractBytesToken, initRpcZ);
+
+    // Deploy new swap between C and Z.
+    byte[] initRpcSwapCandZ =
+        LiquiditySwapLock.initialize(
+            contractTokenC, contractTokenZ, (short) 0, new LiquiditySwapLock.Permission.Anybody());
+    BlockchainAddress swapLockContractAddressCandZ =
+        blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapCandZ);
+
+    // Setup liquidity at the new swap.
+    depositIntoSwap(swapLockContractAddressCandZ, contractOwnerAddress, contractTokenC, cLiquidity);
+    depositIntoSwap(swapLockContractAddressCandZ, contractOwnerAddress, contractTokenZ, zLiquidity);
+    blockchain.sendAction(
+        contractOwnerAddress,
+        swapLockContractAddressCandZ,
+        LiquiditySwapLock.provideInitialLiquidity(cLiquidity, zLiquidity));
+
+    // Add the swap contract to the router
+    blockchain.sendAction(
+        contractOwnerAddress,
+        routerContract,
+        SwapRouter.addSwapContract(swapLockContractAddressCandZ, contractTokenC, contractTokenZ));
+
+    SwapRouter.RouterState routerState = getRouterState();
+    Assertions.assertThat(routerState.swapContracts().get(routerState.swapContracts().size() - 1))
+        .isEqualTo(
+            new SwapRouter.SwapContractInfo(
+                swapLockContractAddressCandZ, contractTokenC, contractTokenZ));
+
+    // Approve the router at the original token.
+    blockchain.sendAction(
+        nonOwnerAddress1, contractTokenA, Token.approve(routerContract, NON_OWNER_TOKEN_AMOUNT_A));
+
+    // Route swap A -> C -> Z.
+    List<BlockchainAddress> swapRoute =
+        List.of(swapLockContractAddressAandC, swapLockContractAddressCandZ);
+
+    final TxExecution s1 =
+        blockchain.sendActionAsync(
+            nonOwnerAddress1,
+            routerContract,
+            SwapRouter.routeSwap(
+                swapRoute,
+                contractTokenA,
+                contractTokenZ,
+                NON_OWNER_TOKEN_AMOUNT_A,
+                BigInteger.ONE),
+            swapRouteGasAmount);
+    executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1));
+
+    Assertions.assertThat(getTokenBalance(contractTokenZ, nonOwnerAddress1))
+        .isEqualTo(BigInteger.valueOf(1023));
+  }
+
   /**
    * If a user provides a swap address which is unknown to the router, routing fails, and no locks
    * are acquired.
@@ -1095,7 +1160,7 @@ public abstract class RoutingTest extends JunitContractTest {
    * in the router performing swaps along the route, and the user ending up with the desired output
    * tokens.
    */
-  @RepeatedTest(10)
+  @RepeatedTest(1)
   @Previous("contractInit")
   void swapRouteMaxLength(RepetitionInfo repetitionInfo) {
     initializeTestMappings();

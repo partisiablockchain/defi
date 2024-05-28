@@ -206,7 +206,7 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
    */
   @Previous("approveTokens")
   @ParameterizedTest
-  @ValueSource(ints = {0, 1, 12, (approvalAmount - 1)})
+  @ValueSource(ints = {0, 1, 12, approvalAmount - 1})
   void approveRelativeFewerTokens(int delta) {
 
     assertThat(allowance(account1, account2)).isEqualTo(BigInteger.valueOf(approvalAmount));

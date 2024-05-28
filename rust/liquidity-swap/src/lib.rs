@@ -35,14 +35,6 @@ pub struct LiquiditySwapContractState {
 }
 
 impl LiquiditySwapContractState {
-    /// Checks whether the state is valid, if not it will return an error reason.
-    pub fn is_valid_or_reason(&self) -> Result<(), &'static str> {
-        if !ALLOWED_FEE_PER_MILLE.contains(&self.swap_fee_per_mille) {
-            return Result::Err("Swap fee must be in range [0,1000]");
-        }
-        Result::Ok(())
-    }
-
     /// Checks that the pools of the contracts have liquidity.
     ///
     /// ### Parameters:
@@ -81,6 +73,10 @@ pub fn initialize(
     token_b_address: Address,
     swap_fee_per_mille: u16,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
+    if !ALLOWED_FEE_PER_MILLE.contains(&swap_fee_per_mille) {
+        panic!("Swap fee must be in range [0,1000]");
+    }
+
     let token_balances =
         TokenBalances::new(context.contract_address, token_a_address, token_b_address).unwrap();
     let new_state = LiquiditySwapContractState {
@@ -88,10 +84,6 @@ pub fn initialize(
         swap_fee_per_mille,
         token_balances,
     };
-
-    if let Err(msg) = new_state.is_valid_or_reason() {
-        panic!("Cannot initialize contract: {}", msg);
-    }
 
     (new_state, vec![])
 }

@@ -640,6 +640,21 @@ public final class MoccaTest extends JunitContractTest {
     assertThat(moccaState.amountOfTokens()).isEqualTo(10_000);
   }
 
+  /** Cannot execute a proposol, if using the wrong id. */
+  @ContractTest(previous = "proposeNewCriteria")
+  void executeNonexistingProposal() {
+
+    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    blockchain.sendAction(voter1, mocca, yesVote);
+    blockchain.sendAction(voter2, mocca, yesVote);
+    blockchain.sendAction(voter3, mocca, yesVote);
+
+    byte[] executeProposal = Mocca.execute(101);
+
+    assertThatThrownBy(() -> blockchain.sendAction(voter4, mocca, executeProposal))
+        .hasMessageContaining("No proposal with id 101");
+  }
+
   // Create a large state in the token contract, so gas failure happens on transfer.
   private void createLargeTokenState(BlockchainAddress sender, BlockchainAddress tokenContract) {
     ArrayList<Token.Transfer> dummyTransfer = new ArrayList<>();

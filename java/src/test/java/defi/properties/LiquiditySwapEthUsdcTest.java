@@ -2,6 +2,7 @@ package defi.properties;
 
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwap;
+import com.partisiablockchain.language.abicodegen.LiquiditySwapLock;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
@@ -57,13 +58,7 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     account2 = blockchain.newAccount(2);
 
     // Setup tokens
-    final byte[] initRpcEth =
-        Token.initialize("Ethereum Ether", "ETH", (byte) DECIMALS_ETH, TOTAL_SUPPLY_ETH);
-    contractEth = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcEth);
-
-    final byte[] initRpcUsdCoin =
-        Token.initialize("USD Coin", "USDC", (byte) DECIMALS_USDC, TOTAL_SUPPLY_USDC);
-    contractUsdCoin = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcUsdCoin);
+    initializeTokenContracts();
 
     // Setup swap
     final byte[] initRpcSwap =
@@ -86,6 +81,114 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     validateBalance(swapContractAddress, contractEth, INITIAL_LIQUIDITY_ETH);
     validateBalance(swapContractAddress, contractUsdCoin, INITIAL_LIQUIDITY_USDC);
     validateExchangeRate(DECIMALS_ETH - DECIMALS_USDC, INITIAL_RATE_ETH_USDC);
+  }
+
+  /**
+   * The contract cannot be deployed with a swap fee less than 0 per mille, or greater than 1000.
+   */
+  @ContractTest
+  void deployFeeOutsideRange() {
+    creatorAddress = blockchain.newAccount(3);
+
+    // Deploy token contracts.
+    initializeTokenContracts();
+
+    byte[] initRpcSwapAtoBlow = LiquiditySwap.initialize(contractUsdCoin, contractEth, (short) -1);
+    Assertions.assertThatCode(
+            () -> blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwapAtoBlow))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("Swap fee must be in range [0,1000]");
+
+    byte[] initRpcSwapAtoBhigh =
+        LiquiditySwap.initialize(contractUsdCoin, contractEth, (short) 1001);
+    Assertions.assertThatCode(
+            () -> blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwapAtoBhigh))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("Swap fee must be in range [0,1000]");
+  }
+
+  /**
+   * If too little liquidity is provided as the initial liquidity, invocation fails, and no
+   * liquidity is provided.
+   */
+  @ContractTest
+  void provideTooLittleInitialLiquidity() {
+    creatorAddress = blockchain.newAccount(1);
+    account2 = blockchain.newAccount(2);
+
+    // Setup tokens
+    initializeTokenContracts();
+
+    // Setup swap
+    final byte[] initRpcSwap =
+        LiquiditySwap.initialize(contractUsdCoin, contractEth, SWAP_FEE_PER_MILLE);
+    swapContractAddress = blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwap);
+
+    // Deposit setup
+    depositAmount(List.of(creatorAddress), contractEth, INITIAL_LIQUIDITY_ETH);
+    depositAmount(List.of(creatorAddress), contractUsdCoin, BigInteger.ZERO);
+
+    // Try to provide initial liquidity
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    creatorAddress,
+                    swapContractAddress,
+                    LiquiditySwap.provideInitialLiquidity(INITIAL_LIQUIDITY_USDC, BigInteger.ZERO)))
+        .hasMessageContaining("The given input amount yielded 0 minted liquidity");
+
+    // Validate no liquidity.
+    LiquiditySwap.LiquiditySwapContractState state =
+        LiquiditySwap.LiquiditySwapContractState.deserialize(
+            blockchain.getContractState(swapContractAddress));
+    LiquiditySwap.TokenBalance stateBalance =
+        state.tokenBalances().balances().get(state.liquidityPoolAddress());
+
+    Assertions.assertThat(stateBalance).isNull();
+  }
+
+  /** If too little liquidity is provided, invocation fails, and no liquidity is added. */
+  @ContractTest(previous = "contractInit")
+  void provideTooLittleLiquidity() {
+    LiquiditySwap.LiquiditySwapContractState state =
+        LiquiditySwap.LiquiditySwapContractState.deserialize(
+            blockchain.getContractState(swapContractAddress));
+    LiquiditySwap.TokenBalance stateBalance =
+        state.tokenBalances().balances().get(state.liquidityPoolAddress());
+
+    final BigInteger aBefore = stateBalance.aTokens();
+    final BigInteger bBefore = stateBalance.bTokens();
+
+    // Try to provide too little liquidity
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    account2,
+                    swapContractAddress,
+                    LiquiditySwap.provideLiquidity(contractUsdCoin, BigInteger.ZERO)))
+        .hasMessageContaining("The given input amount yielded 0 minted liquidity");
+
+    // Validate no liquidity.
+    state =
+        LiquiditySwap.LiquiditySwapContractState.deserialize(
+            blockchain.getContractState(swapContractAddress));
+    stateBalance = state.tokenBalances().balances().get(state.liquidityPoolAddress());
+
+    Assertions.assertThat(stateBalance.aTokens()).isEqualTo(aBefore);
+    Assertions.assertThat(stateBalance.bTokens()).isEqualTo(bBefore);
+  }
+
+  /** If pools are non-empty, a user cannot provide initial liquidity. */
+  @ContractTest(previous = "contractInit")
+  void provideInitialLiquidityAgain() {
+    Assertions.assertThatCode(
+            () ->
+                blockchain.sendAction(
+                    creatorAddress,
+                    swapContractAddress,
+                    LiquiditySwap.provideInitialLiquidity(
+                        INITIAL_LIQUIDITY_USDC, INITIAL_LIQUIDITY_ETH)))
+        .hasMessageContaining("Can only initialize when both pools are empty");
   }
 
   @ContractTest(previous = "contractInit")
@@ -130,5 +233,38 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining(
             "Swap produced 1845999 output tokens, but minimum was set to 1846000.");
+  }
+
+  /** A user cannot perform a swap when there is no liquidity. */
+  @ContractTest(previous = "contractInit")
+  void swapFailsWithNoLiquidity() {
+    final BigInteger usdcAmount =
+        BigInteger.ONE.multiply(INITIAL_RATE_ETH_USDC).multiply(BASE_UNIT_USDC);
+    LiquiditySwap.LiquiditySwapContractState state =
+        LiquiditySwap.LiquiditySwapContractState.deserialize(
+            blockchain.getContractState(swapContractAddress));
+
+    // Contract owner reclaims all liquidity
+    blockchain.sendAction(
+        creatorAddress,
+        swapContractAddress,
+        LiquiditySwapLock.reclaimLiquidity(
+            state.tokenBalances().balances().get(creatorAddress).liquidityTokens()));
+
+    // A user deposits into the swap, and tries to swap.
+    depositAmount(List.of(account2), contractUsdCoin, usdcAmount);
+    Assertions.assertThatCode(() -> swap(account2, contractUsdCoin, usdcAmount))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("Pools must have existing liquidity to perform a swap");
+  }
+
+  private void initializeTokenContracts() {
+    final byte[] initRpcEth =
+        Token.initialize("Ethereum Ether", "ETH", (byte) DECIMALS_ETH, TOTAL_SUPPLY_ETH);
+    contractEth = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcEth);
+
+    final byte[] initRpcUsdCoin =
+        Token.initialize("USD Coin", "USDC", (byte) DECIMALS_USDC, TOTAL_SUPPLY_USDC);
+    contractUsdCoin = blockchain.deployContract(creatorAddress, contractBytesToken, initRpcUsdCoin);
   }
 }
