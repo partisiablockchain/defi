@@ -40,6 +40,7 @@ public final class SwapFactoryTest extends JunitContractTest {
   private BlockchainAddress swapFactory;
   private BlockchainAddress swapAddress;
 
+  /** Setup for testing. Requires some token contracts to swap between. */
   @ContractTest
   void setupTokenContracts() {
     // Setup accounts
@@ -61,14 +62,19 @@ public final class SwapFactoryTest extends JunitContractTest {
     transfer(token2, creator, swapper, INITIAL_ACCOUNT_TOKENS);
   }
 
+  /**
+   * {@link DexSwapFactory} can be initialized by any user. Will result in a mostly empty contract.
+   */
   @ContractTest(previous = "setupTokenContracts")
   void setupFactory() {
     final DexSwapFactory.Permission permissionUpdateSwap =
         new DexSwapFactory.Permission.Specific(List.of(creator));
     final DexSwapFactory.Permission permissionDeploySwap =
         new DexSwapFactory.Permission.Specific(List.of(creator, liquidityProvider));
+    final DexSwapFactory.Permission permissionDelistSwap =
+        new DexSwapFactory.Permission.Specific(List.of(liquidityProvider));
     final byte[] initRpc =
-        DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, (short) 3);
+        DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, permissionDelistSwap);
     swapFactory = blockchain.deployContract(creator, CONTRACT_BYTES, initRpc);
 
     // Assess state
@@ -76,22 +82,24 @@ public final class SwapFactoryTest extends JunitContractTest {
         DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
     assertThat(state.permissionUpdateSwap()).isEqualTo(permissionUpdateSwap);
     assertThat(state.permissionDeploySwap()).isEqualTo(permissionDeploySwap);
+    assertThat(state.permissionDelistSwap()).isEqualTo(permissionDelistSwap);
     assertThat(state.swapContracts()).isEmpty();
     assertThat(state.swapContractBinary()).isNull();
-    assertThat(state.swapFeePerMille()).isEqualTo((short) 3);
   }
 
+  /** Cannot deploy a new swap before the contract code is uploaded. */
   @ContractTest(previous = "setupFactory")
   void failWhenCreatorDeploysBeforeSettingCode() {
     // Make invocation
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token2);
 
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     assertThatCode(() -> blockchain.sendAction(creator, swapFactory, rpc))
         .hasMessageContaining(
             "Cannot deploy swap contract, when swap contract binary has not be set!");
   }
 
+  /** Any user with the update_swap_binary permission, can upload new swap contract code. */
   @ContractTest(previous = "setupFactory")
   void setContractCode() {
     updateSwapBinary(
@@ -107,6 +115,7 @@ public final class SwapFactoryTest extends JunitContractTest {
     assertThat(state.swapContractBinary().version()).isEqualTo(1_0_0);
   }
 
+  /** Users without permission_update_swap permission, cannot upload new swap contract code. */
   @ContractTest(previous = "setupFactory")
   void failWhenNonCreatorAttemptsToUpdateContract() {
     assertThatCode(
@@ -119,15 +128,19 @@ public final class SwapFactoryTest extends JunitContractTest {
         .hasMessageContaining("did not have permission \"update swap\"");
   }
 
+  /**
+   * Users with permission_deploy_swap permission, can deploy a new contract using the code uploaded
+   * through the factory contract.
+   */
   @ContractTest(previous = "setContractCode")
   void createFirstSwap() {
     // Make invocation
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token2);
 
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     blockchain.sendAction(liquidityProvider, swapFactory, rpc);
 
-    // Check state
+    // Check state of dex
     final DexSwapFactory.SwapFactoryState state =
         DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
     assertThat(state.swapContracts()).hasSize(1);
@@ -138,18 +151,32 @@ public final class SwapFactoryTest extends JunitContractTest {
     assertThat(info.contractVersion()).isEqualTo(1_0_0);
     assertThat(info.successfullyDeployed()).isTrue();
     assertThat(info.tokenPair()).isEqualTo(tokenPair);
+
+    // Check state of deployed contract
+    final LiquiditySwap.LiquiditySwapContractState swapContractState =
+        LiquiditySwap.LiquiditySwapContractState.deserialize(
+            blockchain.getContractState(swapAddress));
+    assertThat(swapContractState.swapFeePerMille()).isEqualTo((short) 3);
   }
 
+  /**
+   * Users without permission_deploy_swap permission, will trigger an error when attempting to
+   * deploy.
+   */
   @ContractTest(previous = "setContractCode")
   void failWhenNonCreatorAttemptsToDeployContract() {
     // Make invocation
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token2);
 
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     assertThatCode(() -> blockchain.sendAction(swapper, swapFactory, rpc))
         .hasMessageContaining("did not have permission \"deploy swap\"");
   }
 
+  /**
+   * Deployed contract can be interacted with as expected of swap contracts. In this case it is
+   * possible to provide liquidity.
+   */
   @ContractTest(previous = "createFirstSwap")
   void setupLiquidityProvider() {
 
@@ -172,6 +199,10 @@ public final class SwapFactoryTest extends JunitContractTest {
     assertThat(swapDepositBalance(liquidityProvider, swapAddress)).isPositive();
   }
 
+  /**
+   * Deployed contract can be interacted with as expected of swap contracts. In this case it is
+   * possible to perform a swap.
+   */
   @ContractTest(previous = "setupLiquidityProvider")
   void performSwap() {
 
@@ -191,6 +222,7 @@ public final class SwapFactoryTest extends JunitContractTest {
         .isEqualTo(new BigInteger("335160658106955"));
   }
 
+  /** Contract versions must be monotonically increasing. */
   @ContractTest(previous = "performSwap")
   void failWhenVersionsArentIncreasing() {
     assertThatCode(
@@ -204,27 +236,37 @@ public final class SwapFactoryTest extends JunitContractTest {
             "Versions must be increasing: Previous version 100 should be less than new version 10");
   }
 
+  /** Users with permission_deploy_swap can delist contracts. */
   @ContractTest(previous = "performSwap")
   void delistSwapContract() {
     final byte[] rpc = DexSwapFactory.delistSwapContract(swapAddress);
-    blockchain.sendAction(creator, swapFactory, rpc);
+    blockchain.sendAction(liquidityProvider, swapFactory, rpc);
 
     final DexSwapFactory.SwapFactoryState state =
         DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
     assertThat(state.swapContracts()).isEmpty();
   }
 
+  /** Users without permission_deploy_swap is incapable of delisting contracts. */
+  @ContractTest(previous = "performSwap")
+  void delistSwapContractCannotBeDoneByPermissionlessUsers() {
+    final byte[] rpc = DexSwapFactory.delistSwapContract(swapAddress);
+    assertThatCode(() -> blockchain.sendAction(swapper, swapFactory, rpc))
+        .hasMessageContaining("did not have permission \"delist swap\"");
+  }
+
+  /** Users can still use delisted contracts as normal. */
   @ContractTest(previous = "delistSwapContract")
   void performSwapOnDelistedContract() {
     final BigInteger amountSwappable = swapDepositBalance(swapper, token2);
     assertThat(amountSwappable).isEqualTo(new BigInteger("335160658106955"));
-    // .isBetween(INITIAL_ACCOUNT_TOKENS.shiftRight(1), INITIAL_ACCOUNT_TOKENS);
 
     swap(swapper, token2, amountSwappable);
 
     assertThat(swapDepositBalance(swapper, token2)).isZero();
   }
 
+  /** Users can still extract liquidity from delisted contracts. */
   @ContractTest(previous = "performSwapOnDelistedContract")
   void extractLiquidityFromDelistedContract() {
 
@@ -257,11 +299,12 @@ public final class SwapFactoryTest extends JunitContractTest {
         .isGreaterThan(BigInteger.ONE);
   }
 
+  /** Multiple contracts can be deployed from the same factory. */
   @ContractTest(previous = "createFirstSwap")
   void createSecondSwapContract() {
     // Deploy second swap contract with same token pair
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token2);
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     blockchain.sendAction(creator, swapFactory, rpc);
 
     // Check state
@@ -270,11 +313,12 @@ public final class SwapFactoryTest extends JunitContractTest {
     assertThat(state.swapContracts()).hasSize(2);
   }
 
+  /** Users are prevented from deployed a swap between identical tokens. */
   @ContractTest(previous = "createFirstSwap")
   void failWhenDeployingSelfSwapper() {
     // Deploy second swap contract with same token pair
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token1);
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     assertThatCode(() -> blockchain.sendAction(creator, swapFactory, rpc))
         .hasMessageContaining("Tokens A and B must not be the same contract");
 
@@ -286,6 +330,9 @@ public final class SwapFactoryTest extends JunitContractTest {
     assertThat(tokenPair(token1, token2)).isEqualTo(tokenPair(token2, token1));
   }
 
+  /**
+   * Code updating checks that uploaded code contains WASM magic bytes, to prevent costly mistakes.
+   */
   @ContractTest(previous = "createSecondSwapContract")
   void failWhenUpdatingWithNonCode() {
     assertThatCode(
@@ -295,6 +342,9 @@ public final class SwapFactoryTest extends JunitContractTest {
         .hasMessageContaining("Bytecode does not contain WASM code");
   }
 
+  /**
+   * Code updating checks that uploaded code contains ABI magic bytes, to prevent costly mistakes.
+   */
   @ContractTest(previous = "createSecondSwapContract")
   void failWhenUpdatingWithNonAbi() {
     assertThatCode(
@@ -304,6 +354,10 @@ public final class SwapFactoryTest extends JunitContractTest {
         .hasMessageContaining("ABI data invalid");
   }
 
+  /**
+   * Swap contracts can be created with a fully open permission, if desired, allowing anyone to
+   * deploy contracts.
+   */
   @ContractTest(previous = "setupTokenContracts")
   void setupFactoryWhereAnybodyCanCallDeploy() {
     // Deploy factory
@@ -312,7 +366,7 @@ public final class SwapFactoryTest extends JunitContractTest {
     final DexSwapFactory.Permission permissionDeploySwap = new DexSwapFactory.Permission.Anybody();
 
     final byte[] initRpc =
-        DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, (short) 3);
+        DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, permissionUpdateSwap);
     swapFactory = blockchain.deployContract(creator, CONTRACT_BYTES, initRpc);
 
     // Update swap binary
@@ -324,7 +378,7 @@ public final class SwapFactoryTest extends JunitContractTest {
 
     // Deploy swaps
     final DexSwapFactory.TokenPair tokenPair = tokenPair(token1, token2);
-    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair);
+    final byte[] rpc = DexSwapFactory.deploySwapContract(tokenPair, (short) 3);
     blockchain.sendAction(creator, swapFactory, rpc);
     blockchain.sendAction(liquidityProvider, swapFactory, rpc);
     blockchain.sendAction(swapper, swapFactory, rpc);

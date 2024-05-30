@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+#
+# Script for initializing a constellation of token and swap contracts, and for
+# interacting with the swap contract.
+#
+# Defi contracts used by this script:
+#
+# - Token contract: To swap between
+# - Swap-lock contract: To swap single tokens.
+# - Swap Factory: Deploys new swap contracts.
+# - Router contract: Capable of executing multiple swaps at a time.
+
+set -u
 
 RED='\033[0;31m'
 NOCOLOR='\033[0m'
@@ -7,6 +19,8 @@ REGEX_CONTRACT='/(([0-9]|[a-f]){42})'
 REGEX_TRANSACTION_ADDRESS='transactions/(([0-9]|[a-f]){24})(([0-9]|[a-f]){40})'
 
 CONTRACT_DIR="rust/target/wasm32-unknown-unknown/release/"
+
+NETWORK="testnet"
 
 # Deploy an amount of token contracts with the same total supply and decimals used.
 # Populates a given array with the contract addresses of the deployed contracts.
@@ -24,7 +38,8 @@ function deploy_token_contracts() {
     local token_symbol="DT${alphabet[i]}"
     local output_text
     output_text=$(cargo partisia-contract transaction deploy \
-      --privatekey "$1" \
+      --net="$NETWORK" \
+      --pk="$1" \
       --gas 1100000 \
       "$CONTRACT_DIR"/token.wasm \
       "$CONTRACT_DIR"/token.abi \
@@ -36,18 +51,18 @@ function deploy_token_contracts() {
 # Deploys a DEX Swap factory, used to deploy swap contracts between tokens.
 # $1 - path to private key.
 # $2 - permission of updating swap binary.
-# $3 - permission of deploying new swap.
-# $4 - fee in per mille.
+# $3 - permission of deploying and unlisting swap contracts.
 function deploy_factory() {
   local output_text
   output_text=$(cargo partisia-contract transaction deploy \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 1300000 \
     "$CONTRACT_DIR"/dex_swap_factory.wasm \
     "$CONTRACT_DIR"/dex_swap_factory.abi \
     Specific "{" [ "$2" ] "}" \
     Specific "{" [ "$3" ] "}" \
-    "$4")
+    Specific "{" [ "$3" ] "}")
 
   [[ $output_text =~ $REGEX_CONTRACT ]] && echo "${BASH_REMATCH[1]}"
 }
@@ -58,16 +73,19 @@ function deploy_factory() {
 # $2 - dex factory address.
 # $3 - first swap token.
 # $4 - second swap token.
-# $5 - Address of contract permitted to acquired locks.
+# $5 - swap fee per mille
+# $6 - Address of contract permitted to acquired locks.
 function deploy_swap_through_factory() {
   local output_text
   output_text=$(cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 1100000 \
     "$2" \
     deploy_swap_lock_contract \
     "{" "$3" "$4" "}" \
-    Specific "{" [ "$5" ] "}")
+    "$5" \
+    Specific "{" [ "$6" ] "}")
 
   [[ $output_text =~ $REGEX_TRANSACTION_ADDRESS ]] && echo "02${BASH_REMATCH[3]}"
 }
@@ -77,7 +95,8 @@ function deploy_swap_through_factory() {
 # $2 - dex factory address.
 function update_swap_binary() {
   cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 1000000 \
     "$2" \
     update_swap_binary \
@@ -92,7 +111,8 @@ function update_swap_binary() {
 function deploy_router() {
   local output_text
   output_text=$(cargo partisia-contract transaction deploy \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 2000000 \
     "$CONTRACT_DIR"/swap_router.wasm \
     "$CONTRACT_DIR"/swap_router.abi \
@@ -111,7 +131,8 @@ function deploy_router() {
 # $5 - address of the 'b' token of the swap address.
 function add_swap_to_router() {
   cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 3000 \
     "$2" \
     add_swap_contract \
@@ -128,7 +149,8 @@ function add_swap_to_router() {
 # $4 - Approval amount.
 function approve() {
   cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 20000 \
     "$2" \
     approve \
@@ -143,7 +165,8 @@ function approve() {
 # $4 - Amount to deposit.
 function deposit() {
   cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 20000 \
     "$2" \
     deposit \
@@ -159,7 +182,8 @@ function deposit() {
 # $4 - second token liquidity.
 function provide_initial_liquidity() {
   cargo partisia-contract transaction action \
-    --privatekey "$1" \
+    --net="$NETWORK" \
+    --pk="$1" \
     --gas 3000 \
     "$2" \
     provide_initial_liquidity \
@@ -201,7 +225,8 @@ function route_swap() {
 
   # Route swap
   cargo partisia-contract transaction action \
-    --privatekey "$private_key" \
+    --net="$NETWORK" \
+    --pk="$private_key" \
     --gas 500000 \
     "$address_router" \
     route_swap \
@@ -214,13 +239,24 @@ function route_swap() {
 
 function deploy_help() {
   echo "Usage: $0 deploy [-f <swap-fee-per-mille>] -p <file> -a <address>
+
 Deploy a small constellation of token contracts, swap contracts and a routing contract.
-Currently creates 3 tokens: A, B, C, a dex-swap factory, 2 swap contracts through the factory: AB, BC, and a router.
-  -p <file>               <file> must be a path to the private key of the sender account
-  -f <swap-fee-per-mille> Swap fee of the deployed swap contracts.
+
+Creates 3 tokens (A, B, C), a swap factory, 2 swap contracts through the factory (A/B, B/C), and a router.
+
+  -p <file>               <file> must be a path to the private key of the sender account.
+  -f <swap-fee-per-mille> Swap fee of the deployed swap contracts (in per mille; that is tenths of percentages.)
   -a <address>            Address of the account associated with the private key used with -p.
-                          This is the account who has permission to update swap binaries, deploy new swaps and update known swaps at the router."
+                          This is the account who has permission to update swap binaries, deploy new swap contracts and update known swaps at the router."
   exit "${1:-0}"
+}
+
+function show_deployment_address() {
+  local browser_url="https://browser.testnet.partisiablockchain.com/contracts/"
+  if [ "$NETWORK" = "mainnet" ]; then
+    browser_url="https://browser.partisiablockchain.com/contracts/"
+  fi
+  printf "%-18s : %s    (%s%s)\n" "$1" "$2" "$browser_url" "$2"
 }
 
 # Setup a small constellation of token, factory, swap and routing contracts,
@@ -284,10 +320,10 @@ function deploy() {
   local token_b=${token_addresses[1]}
   local token_c=${token_addresses[2]}
 
-  local dex_address
-  dex_address=$(deploy_factory "$__privatekey_path" "$__update_swap_binary_account_permission" "$__deploy_swap_contract_account_permission" "$__swap_fee_per_mille")
+  local swap_factory_address
+  swap_factory_address=$(deploy_factory "$__privatekey_path" "$__update_swap_binary_account_permission" "$__deploy_swap_contract_account_permission" "$__swap_fee_per_mille")
 
-  update_swap_binary "$__privatekey_path" "$dex_address"
+  update_swap_binary "$__privatekey_path" "$swap_factory_address"
 
   local routing_address
   routing_address=$(deploy_router "$__privatekey_path" "$__update_router_known_swaps_account_permission")
@@ -298,9 +334,9 @@ function deploy() {
   #
 
   local swap_ab
-  swap_ab=$(deploy_swap_through_factory "$__privatekey_path" "$dex_address" "$token_a" "$token_b" "$routing_address") # A-B
+  swap_ab=$(deploy_swap_through_factory "$__privatekey_path" "$swap_factory_address" "$token_a" "$token_b" "$__swap_fee_per_mille" "$routing_address") # A-B
   local swap_bc
-  swap_bc=$(deploy_swap_through_factory "$__privatekey_path" "$dex_address" "$token_b" "$token_c" "$routing_address") # B-C
+  swap_bc=$(deploy_swap_through_factory "$__privatekey_path" "$swap_factory_address" "$token_b" "$token_c" "$__swap_fee_per_mille" "$routing_address") # B-C
 
   # Update the router, so it knows the swap contracts.
   add_swap_to_router "$__privatekey_path" "$routing_address" "$swap_ab" "$token_a" "$token_b"
@@ -323,23 +359,20 @@ function deploy() {
   provide_initial_liquidity "$__privatekey_path" "$swap_ab" "10000000000" "10000000000"
   provide_initial_liquidity "$__privatekey_path" "$swap_bc" "10000000000" "10000000000"
 
-  echo "Contracts have been deployed at the following addresses:
-Token A: $token_a
-Token B: $token_b
-Token C: $token_c
+  echo "Contracts have been deployed at the following addresses:"
 
-Swap factory: $dex_address
-
-Swap AB: $swap_ab
-Swap BC: $swap_bc
-
-Router: $routing_address
-"
+  show_deployment_address "Token A" "$token_a"
+  show_deployment_address "Token B" "$token_b"
+  show_deployment_address "Token C" "$token_c"
+  show_deployment_address "Swap factory" "$swap_factory_address"
+  show_deployment_address "Swap A/B" "$swap_ab"
+  show_deployment_address "Swap B/C" "$swap_bc"
+  show_deployment_address "Router" "$routing_address"
 
   echo "TOKEN_A=$token_a
 TOKEN_B=$token_b
 TOKEN_C=$token_c
-FACTORY=$dex_address
+FACTORY=$swap_factory_address
 SWAP_AB=$swap_ab
 SWAP_BC=$swap_bc
 ROUTER=$routing_address
@@ -416,8 +449,7 @@ function route() {
 }
 
 function help() {
-  echo "
-Helper script for setting up swap constellation and routing simple swaps.
+  echo "Helper script for setting up swap constellation and routing simple swaps.
 Usage: $0 COMMAND
 Commands:
   help    Prints this usage message

@@ -14,6 +14,7 @@ use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 
 use defi_common::deploy;
+use defi_common::math::assert_is_per_mille;
 use defi_common::permission::Permission;
 
 /// Pair of token contract addresses.
@@ -45,12 +46,12 @@ pub struct SwapFactoryState {
     pub permission_update_swap: Permission,
     /// Permission indicating who are allowed to deploy new swap contracts.
     pub permission_deploy_swap: Permission,
+    /// Permission indicating who are allowed to delist swap contracts.
+    pub permission_delist_swap: Permission,
     /// Deployed swap contracts.
     pub swap_contracts: AvlTreeMap<Address, SwapContractInfo>,
     /// Deployment information for new swap contract.
     pub swap_contract_binary: Option<deploy::DeployableContract>,
-    /// Swap fee for new contracts.
-    pub swap_fee_per_mille: u16,
 }
 
 /// Initial action to create the initial state.
@@ -68,14 +69,14 @@ pub fn initialize(
     ctx: ContractContext,
     permission_update_swap: Permission,
     permission_deploy_swap: Permission,
-    swap_fee_per_mille: u16,
+    permission_delist_swap: Permission,
 ) -> SwapFactoryState {
     SwapFactoryState {
         permission_update_swap,
         permission_deploy_swap,
+        permission_delist_swap,
         swap_contracts: AvlTreeMap::new(),
         swap_contract_binary: None,
-        swap_fee_per_mille,
     }
 }
 
@@ -119,6 +120,7 @@ pub fn update_swap_binary(
 /// * `ctx`: [`ContractContext`], the context of the action call.
 /// * `state`: [`SwapFactoryState`], the state before the call.
 /// * `token_pair`: [`TokenPair`], the [`TokenPair`] of the new swap contract.
+/// * `swap_fee_per_mille`: [`u16`], swap fee per swap, between 0‰ and 1000‰.
 ///
 /// ### Returns:
 ///
@@ -128,10 +130,12 @@ pub fn deploy_swap_contract(
     ctx: ContractContext,
     mut state: SwapFactoryState,
     token_pair: TokenPair,
+    swap_fee_per_mille: u16,
 ) -> (SwapFactoryState, Vec<EventGroup>) {
     state
         .permission_deploy_swap
         .assert_permission_for(&ctx.sender, "deploy swap");
+    assert_is_per_mille(swap_fee_per_mille);
 
     let swap_contract_binary = state
         .swap_contract_binary
@@ -143,7 +147,7 @@ pub fn deploy_swap_contract(
     let init_msg = SwapContractInitMsg {
         token_a_address: token_pair.token_a_address,
         token_b_address: token_pair.token_b_address,
-        swap_fee_per_mille: state.swap_fee_per_mille,
+        swap_fee_per_mille,
     };
 
     let contract_address = deploy::deploy_contract(
@@ -184,6 +188,7 @@ pub fn deploy_swap_contract(
 /// * `ctx`: [`ContractContext`], the context of the action call.
 /// * `state`: [`SwapFactoryState`], the state before the call.
 /// * `token_pair`: [`TokenPair`], the [`TokenPair`] of the new swap contract.
+/// * `swap_fee_per_mille`: [`u16`], swap fee per swap, between 0‰ and 1000‰.
 /// * `lock_permission`: [`Permission`], who is permitted to acquired locks at the swap contract.
 ///
 /// ### Returns:
@@ -194,11 +199,13 @@ pub fn deploy_swap_lock_contract(
     ctx: ContractContext,
     mut state: SwapFactoryState,
     token_pair: TokenPair,
+    swap_fee_per_mille: u16,
     lock_permission: Permission,
 ) -> (SwapFactoryState, Vec<EventGroup>) {
     state
         .permission_deploy_swap
         .assert_permission_for(&ctx.sender, "deploy swap");
+    assert_is_per_mille(swap_fee_per_mille);
 
     let swap_contract_binary = state
         .swap_contract_binary
@@ -210,7 +217,7 @@ pub fn deploy_swap_lock_contract(
     let swap_init_msg = SwapContractInitMsg {
         token_a_address: token_pair.token_a_address,
         token_b_address: token_pair.token_b_address,
-        swap_fee_per_mille: state.swap_fee_per_mille,
+        swap_fee_per_mille,
     };
 
     let mut swap_init_bytes = swap_init_msg.to_init_bytes();
@@ -325,6 +332,9 @@ pub fn delist_swap_contract(
     mut state: SwapFactoryState,
     address: Address,
 ) -> SwapFactoryState {
+    state
+        .permission_deploy_swap
+        .assert_permission_for(&ctx.sender, "delist swap");
     state.swap_contracts.remove(&address);
     state
 }
