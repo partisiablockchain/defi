@@ -9,7 +9,6 @@ extern crate pbc_contract_codegen;
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
-use std::ops::RangeInclusive;
 
 use create_type_spec_derive::CreateTypeSpec;
 use pbc_contract_common::avl_tree_map::AvlTreeMap;
@@ -19,13 +18,10 @@ use defi_common::interact_mpc20;
 use defi_common::liquidity_util::{
     calculate_swap_to_amount, AcquiredLiquidityLockInformation, LiquidityLockId,
 };
-use defi_common::math::u128_sqrt;
+use defi_common::math::{assert_is_per_mille, u128_sqrt};
 use defi_common::permission::Permission;
 pub use defi_common::token_balances::Token;
 use defi_common::token_balances::{TokenAmount, TokenBalance, TokenBalances, TokensInOut};
-
-/// The range of allowed [`LiquiditySwapContractState::swap_fee_per_mille`].
-pub const ALLOWED_FEE_PER_MILLE: RangeInclusive<u16> = 0..=1000;
 
 /// Stores data about a lock, which is later used when the lock is executed or cancelled.
 #[derive(ReadWriteState, CreateTypeSpec)]
@@ -177,7 +173,7 @@ pub struct LiquiditySwapContractState {
     pub permission_lock_swap: Permission,
     /// The address of this contract
     pub liquidity_pool_address: Address,
-    /// The fee for making swaps per mille. Must be in range [`ALLOWED_FEE_PER_MILLE`].
+    /// The fee for making swaps per mille. Must be [`assert_is_per_mille`].
     pub swap_fee_per_mille: u16,
     /// The map containing all token balances of all users and the contract itself. <br>
     /// The contract should always have a balance equal to the sum of all token balances.
@@ -226,9 +222,7 @@ pub fn initialize(
     swap_fee_per_mille: u16,
     permission_lock_swap: Permission,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
-    if !ALLOWED_FEE_PER_MILLE.contains(&swap_fee_per_mille) {
-        panic!("Swap fee must be in range [0,1000]");
-    }
+    assert_is_per_mille(swap_fee_per_mille);
 
     let token_balances =
         match TokenBalances::new(context.contract_address, token_a_address, token_b_address) {

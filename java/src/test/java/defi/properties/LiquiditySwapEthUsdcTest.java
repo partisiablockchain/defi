@@ -97,14 +97,14 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     Assertions.assertThatCode(
             () -> blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwapAtoBlow))
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Swap fee must be in range [0,1000]");
+        .hasMessageContaining("per mille value was 65535‰, but must be between 0‰ and 1000‰");
 
     byte[] initRpcSwapAtoBhigh =
         LiquiditySwap.initialize(contractUsdCoin, contractEth, (short) 1001);
     Assertions.assertThatCode(
             () -> blockchain.deployContract(creatorAddress, contractBytesSwap, initRpcSwapAtoBhigh))
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Swap fee must be in range [0,1000]");
+        .hasMessageContaining("per mille value was 1001‰, but must be between 0‰ and 1000‰");
   }
 
   /**

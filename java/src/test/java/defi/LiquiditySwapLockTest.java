@@ -168,7 +168,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     Assertions.assertThatCode(
             () -> blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwapAtoB))
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Swap fee must be in range [0,1000]");
+        .hasMessageContaining("per mille value was 65535‰, but must be between 0‰ and 1000‰");
   }
 
   /** The contract cannot be deployed with a swap fee above 1000 per mille. */
@@ -188,7 +188,7 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     Assertions.assertThatCode(
             () -> blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwapAtoB))
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Swap fee must be in range [0,1000]");
+        .hasMessageContaining("per mille value was 1001‰, but must be between 0‰ and 1000‰");
   }
 
   /** The contract cannot be deployed with a token contract address which isn't a contract. */

@@ -6,19 +6,15 @@ extern crate pbc_contract_codegen;
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
-use std::ops::RangeInclusive;
 
 use defi_common::interact_mpc20;
 use defi_common::liquidity_util::calculate_swap_to_amount;
-use defi_common::math::u128_sqrt;
+use defi_common::math::{assert_is_per_mille, u128_sqrt};
 pub use defi_common::token_balances::Token;
 use defi_common::token_balances::{TokenBalances, TokensInOut};
 
 /// Token amounts type. Should be set to what the token contract uses.
 pub type TokenAmount = u128;
-
-/// The range of allowed [`LiquiditySwapContractState::swap_fee_per_mille`].
-pub const ALLOWED_FEE_PER_MILLE: RangeInclusive<u16> = 0..=1000;
 
 /// This is the state of the contract which is persisted on the chain.
 ///
@@ -27,7 +23,7 @@ pub const ALLOWED_FEE_PER_MILLE: RangeInclusive<u16> = 0..=1000;
 pub struct LiquiditySwapContractState {
     /// The address of this contract
     pub liquidity_pool_address: Address,
-    /// The fee for making swaps per mille. Must be in range [`ALLOWED_FEE_PER_MILLE`].
+    /// The fee for making swaps per mille. Must satisfy [`assert_is_per_mille`].
     pub swap_fee_per_mille: u16,
     /// The map containing all token balances of all users and the contract itself. <br>
     /// The contract should always have a balance equal to the sum of all token balances.
@@ -73,9 +69,7 @@ pub fn initialize(
     token_b_address: Address,
     swap_fee_per_mille: u16,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
-    if !ALLOWED_FEE_PER_MILLE.contains(&swap_fee_per_mille) {
-        panic!("Swap fee must be in range [0,1000]");
-    }
+    assert_is_per_mille(swap_fee_per_mille);
 
     let token_balances =
         TokenBalances::new(context.contract_address, token_a_address, token_b_address).unwrap();

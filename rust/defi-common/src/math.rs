@@ -1,5 +1,7 @@
 //! Utility module containing math functions.
 
+use std::ops::RangeInclusive;
+
 /// Find the u128 square root of `input` (using binary search) rounding down.
 ///
 /// ### Parameters:
@@ -50,6 +52,16 @@ pub fn u128_division_ceil(numerator: u128, denominator: u128) -> Result<u128, &'
         .checked_rem(denominator)
         .ok_or("Division by zero")?;
     Ok(div_floor + u128::from(rem != 0))
+}
+
+/// The allowed range of per mille values.
+pub const ALLOWED_RANGE_PER_MILLE: RangeInclusive<u16> = 0..=1000;
+
+/// Asserts that given value was within the range of per mille values (between 0 and 1000.)
+pub fn assert_is_per_mille(per_mille: u16) {
+    if !ALLOWED_RANGE_PER_MILLE.contains(&per_mille) {
+        panic!("per mille value was {per_mille}‰, but must be between 0‰ and 1000‰");
+    }
 }
 
 #[cfg(test)]
