@@ -48,7 +48,7 @@ pub struct Order {
     /// Either the amount of bought or sold token B.
     pub amount_b: MatchAmountType,
     /// Whether the order is buying or selling token A.
-    pub buy_a: Sbi1,
+    pub buy_a: Sbu1,
 }
 
 /// A match of [`Order`] orders.
@@ -130,7 +130,7 @@ pub fn match_order(order_id: SecretVarId) -> Match {
     best_match_yet
 }
 
-fn deposit_large_enough(order_id: SecretVarId, order: Order) -> Sbi1 {
+fn deposit_large_enough(order_id: SecretVarId, order: Order) -> Sbu1 {
     let metadata = load_metadata::<VarMetadata>(order_id);
     if order.buy_a {
         order.amount_b <= Sbi128::from(metadata.deposit_amount_b as i128)
@@ -140,16 +140,16 @@ fn deposit_large_enough(order_id: SecretVarId, order: Order) -> Sbi1 {
 }
 
 /// Determines whether the given [`PotentialMatch`] is a match fitting the requirements.
-fn is_a_match(potential_match: PotentialMatch) -> Sbi1 {
+fn is_a_match(potential_match: PotentialMatch) -> Sbu1 {
     // Not a match when both parts are buying / selling
-    let order_swap: Sbi1 = potential_match.buy_b.buy_a != potential_match.buy_a.buy_a;
+    let order_swap: Sbu1 = potential_match.buy_b.buy_a != potential_match.buy_a.buy_a;
 
     // Not a match if ratio is bad
     order_swap && orders_satisfies_the_other(potential_match)
 }
 
 /// Determines whether the [`PotentialMatch`] satisfies the given purchase ratio.
-fn orders_satisfies_the_other(potential_match: PotentialMatch) -> Sbi1 {
+fn orders_satisfies_the_other(potential_match: PotentialMatch) -> Sbu1 {
     potential_match.buy_b.amount_a >= potential_match.buy_a.amount_a
         && potential_match.buy_a.amount_b >= potential_match.buy_b.amount_b
 }

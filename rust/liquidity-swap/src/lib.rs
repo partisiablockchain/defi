@@ -10,10 +10,10 @@ use pbc_contract_common::events::EventGroup;
 use defi_common::interact_mpc20;
 use defi_common::liquidity_util::calculate_swap_to_amount;
 use defi_common::math::{assert_is_per_mille, u128_sqrt};
-pub use defi_common::token_balances::Token;
+use defi_common::token_balances::DepositToken;
 use defi_common::token_balances::{TokenBalances, TokensInOut};
 
-/// Token amounts type. Should be set to what the token contract uses.
+/// DepositToken amounts type. Should be set to what the token contract uses.
 pub type TokenAmount = u128;
 
 /// This is the state of the contract which is persisted on the chain.
@@ -138,7 +138,7 @@ pub fn deposit(
 ///
 /// * `state`: [`LiquiditySwapContractState`] - The current state of the contract.
 ///
-/// * `token`: [`Token`] - Indicating the token of which to add `amount` to.
+/// * `token`: [`DepositToken`] - Indicating the token of which to add `amount` to.
 ///
 /// * `amount`: [`TokenAmount`] - The desired amount to add to the user's total amount of `token`.
 /// ### Returns
@@ -149,7 +149,7 @@ pub fn deposit_callback(
     context: ContractContext,
     callback_context: CallbackContext,
     mut state: LiquiditySwapContractState,
-    token: Token,
+    token: DepositToken,
     amount: TokenAmount,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     assert!(callback_context.success, "Transfer did not succeed");
@@ -369,9 +369,11 @@ pub fn reclaim_liquidity(
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     let user = &context.sender;
 
-    state
-        .token_balances
-        .deduct_from_token_balance(*user, Token::LIQUIDITY, liquidity_token_amount);
+    state.token_balances.deduct_from_token_balance(
+        *user,
+        DepositToken::LIQUIDITY,
+        liquidity_token_amount,
+    );
 
     let contract_token_balance = state
         .token_balances
@@ -384,15 +386,21 @@ pub fn reclaim_liquidity(
         contract_token_balance.liquidity_tokens,
     );
 
-    state
-        .token_balances
-        .move_tokens(state.liquidity_pool_address, *user, Token::A, a_output);
-    state
-        .token_balances
-        .move_tokens(state.liquidity_pool_address, *user, Token::B, b_output);
+    state.token_balances.move_tokens(
+        state.liquidity_pool_address,
+        *user,
+        DepositToken::A,
+        a_output,
+    );
+    state.token_balances.move_tokens(
+        state.liquidity_pool_address,
+        *user,
+        DepositToken::B,
+        b_output,
+    );
     state.token_balances.deduct_from_token_balance(
         state.liquidity_pool_address,
-        Token::LIQUIDITY,
+        DepositToken::LIQUIDITY,
         liquidity_token_amount,
     );
 
@@ -551,12 +559,14 @@ fn provide_liquidity_internal(
         token_out_amount,
     );
 
-    state
-        .token_balances
-        .add_to_token_balance(*user, Token::LIQUIDITY, minted_liquidity_tokens);
+    state.token_balances.add_to_token_balance(
+        *user,
+        DepositToken::LIQUIDITY,
+        minted_liquidity_tokens,
+    );
     state.token_balances.add_to_token_balance(
         state.liquidity_pool_address,
-        Token::LIQUIDITY,
+        DepositToken::LIQUIDITY,
         minted_liquidity_tokens,
     );
 }

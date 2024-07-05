@@ -636,7 +636,8 @@ public abstract class NftAuctionTest extends JunitContractTest {
     // bidder tries to bid before being approved to transfer the token
     assertThatThrownBy(() -> blockchain.sendAction(bidderNotApproved, auction, bidForTen))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from: 0/10");
+        .hasMessageContaining(
+            "Insufficient DOGE allowance for transfer_from! Allowed 0, but trying to transfer 10");
   }
 
   /**
@@ -652,6 +653,8 @@ public abstract class NftAuctionTest extends JunitContractTest {
     byte[] bidForTenThousand = NftAuction.bid(BigInteger.valueOf(10_000));
     assertThatThrownBy(() -> blockchain.sendAction(bidder1, auction, bidForTenThousand))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from: 500/10000");
+        .hasMessageContaining(
+            "Insufficient DOGE allowance for transfer_from! Allowed 500, but trying to transfer"
+                + " 10000");
   }
 }

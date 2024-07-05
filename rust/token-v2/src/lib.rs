@@ -5,59 +5,50 @@ extern crate pbc_contract_codegen;
 
 use create_type_spec_derive::CreateTypeSpec;
 use read_write_rpc_derive::ReadWriteRPC;
-use std::ops::{Add, Sub};
+use std::ops::Sub;
 
+use defi_common::token_state::AbstractTokenState;
 use pbc_contract_common::address::Address;
 use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::ContractContext;
 use pbc_traits::ReadWriteState;
 use read_write_state_derive::ReadWriteState;
 
-/// Custom struct for the state of the contract.
+/// MPC-20-v2 token contract compatible state.
 ///
-/// The "state" attribute is attached.
-///
-/// ### Fields:
-///
-/// * `name`: [`String`], the name of the token - e.g. "MyToken".\
-///
-/// * `symbol`: [`String`], the symbol of the token. E.g. "HIX".\
-///
-/// * `decimals`: [`u8`], the number of decimals the token uses - e.g. 8,
-/// means to divide the token amount by `100000000` to get its user representation.\
-///
-/// * `owner`: [`Address`], owner of the contract.
-///
-/// * `total_supply`: [`u128`], current amount of tokens for the TokenContract.
-///
-/// * `balances`: [`AvlTreeMap<Address, u128>`], ledger for the accounts associated with the contract.
-///
-/// * `allowed`: [`AvlTreeMap<AllowedAddress, u128>`], allowance from an owner to a spender.
+/// Uses the [`AbstractTokenState`] to implement [`transfer`].
 #[state]
 pub struct TokenState {
-    name: String,
-    decimals: u8,
-    symbol: String,
-    owner: Address,
-    total_supply: u128,
-    balances: AvlTreeMap<Address, u128>,
-    allowed: AvlTreeMap<AllowedAddress, u128>,
+    /// The name of the token - e.g. "MyToken".
+    pub name: String,
+    /// The symbol of the token. E.g. "HIX".
+    pub decimals: u8,
+    /// The number of decimals the token uses - e.g. 8,
+    /// means to divide the token amount by `100000000` to get its user representation.
+    pub symbol: String,
+    /// The owner of the contract. Not used for anything beyond the initial minting.
+    pub owner: Address,
+    /// Current amount of tokens for the TokenContract.
+    pub total_supply: u128,
+    /// Ledger for the accounts associated with the contract.
+    pub balances: AvlTreeMap<Address, u128>,
+    /// Ledger for allowances, that allows users or contracts to transfer tokens on behalf of
+    /// others.
+    pub allowed: AvlTreeMap<AllowedAddress, u128>,
 }
 
-/// Address pair representing some allowance. Owner allows spender to spend an amount of tokens.
-///
-/// ### Fields:
-///
-/// * `owner`: [`Address`], owner of tokens.
-///
-/// * `spender`: [`Address`], spender of tokens.
+/// Address pair representing an allowance. Owner allows spender to transfer tokens on behalf of
+/// them.
 #[derive(ReadWriteState, CreateTypeSpec, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AllowedAddress {
-    owner: Address,
-    spender: Address,
+    /// Owner of the tokens
+    pub owner: Address,
+    /// User allowed to transfer on behalf of [`AllowedAddress::owner`].
+    pub spender: Address,
 }
 
 /// Extension trait for inserting into a map holding balances.
+///
 /// In a balance map only non-zero values are stored.
 /// If a key has no value in the map the implied value is zero.
 trait BalanceMap<K: Ord, V> {
@@ -90,32 +81,20 @@ impl<V: Sub<V, Output = V> + PartialEq + Copy + ReadWriteState, K: ReadWriteStat
     }
 }
 
-impl TokenState {
-    /// Gets the balance of the specified address.
-    ///
-    /// ### Parameters:
-    ///
-    /// * `owner`: The [`Address`] to query the balance of.
-    ///
-    /// ### Returns:
-    ///
-    /// An [`u64`] representing the amount owned by the passed address.
-    pub fn balance_of(&self, owner: &Address) -> u128 {
+impl AbstractTokenState for TokenState {
+    fn get_symbol(&self) -> &str {
+        &self.symbol
+    }
+
+    fn update_balance(&mut self, owner: Address, amount: u128) {
+        self.balances.insert_balance(owner, amount);
+    }
+
+    fn balance_of(&self, owner: &Address) -> u128 {
         self.balances.get(owner).unwrap_or(0)
     }
 
-    /// Function to check the amount of tokens that an owner allowed to a spender.
-    ///
-    /// ### Parameters:
-    ///
-    /// * `owner`: [`Address`] The address which owns the funds.
-    ///
-    /// * `spender`: [`Address`] The address which will spend the funds.
-    ///
-    /// ### Returns:
-    ///
-    /// A [`u64`] specifying the amount whicher `spender` is still allowed to withdraw from `owner`.
-    pub fn allowance(&self, owner: &Address, spender: &Address) -> u128 {
+    fn allowance(&self, owner: &Address, spender: &Address) -> u128 {
         self.allowed
             .get(&AllowedAddress {
                 owner: *owner,
@@ -124,27 +103,9 @@ impl TokenState {
             .unwrap_or(0)
     }
 
-    /// Updates the internal allowance map, overwriting `owner`'s allowance for `spender` to `amount`.
-    ///
-    /// If `owner` does not currently have any allowance, a new entry is added to `self`.
     fn update_allowance(&mut self, owner: Address, spender: Address, amount: u128) {
         self.allowed
             .insert_balance(AllowedAddress { owner, spender }, amount);
-    }
-
-    /// Updates the internal allowance map, adding `delta` allowance for `spender` to additionally
-    /// spend of on behalf of `owner`.
-    ///
-    /// If `owner` does not currently have any allowance, a new entry is added to `self`, with `delta`
-    /// as the initial amount.
-    /// If `delta` is negative, the allowance is lowered.
-    /// Panics if adding `delta` would overflow, or the allowed balance would become negative.
-    fn update_allowance_relative(&mut self, owner: Address, spender: Address, delta: i128) {
-        let existing_allowance = self.allowance(&owner, &spender);
-        let new_allowance = existing_allowance
-            .checked_add_signed(delta)
-            .expect("Allowance would become negative.");
-        self.update_allowance(owner, spender, new_allowance);
     }
 }
 
@@ -154,12 +115,12 @@ impl TokenState {
 ///
 /// * `ctx`: [`ContractContext`], initial context.
 ///
-/// * `name`: [`String`], the name of the token - e.g. "MyToken".\
+/// * `name`: [`String`], the name of the token - e.g. "MyToken".
 ///
-/// * `symbol`: [`String`], the symbol of the token. E.g. "HIX".\
+/// * `symbol`: [`String`], the symbol of the token. E.g. "HIX".
 ///
 /// * `decimals`: [`u8`], the number of decimals the token uses - e.g. 8,
-/// means to divide the token amount by `100000000` to get its user representation.\
+/// means to divide the token amount by `100000000` to get its user representation.
 ///
 /// * `total_supply`: [`u128`], current amount of tokens for the TokenContract.
 ///
@@ -174,21 +135,21 @@ pub fn initialize(
     decimals: u8,
     total_supply: u128,
 ) -> TokenState {
-    let mut balances = AvlTreeMap::new();
-    balances.insert_balance(ctx.sender, total_supply);
-
-    TokenState {
+    let mut initial_state = TokenState {
         name,
         symbol,
         decimals,
         owner: ctx.sender,
         total_supply,
-        balances,
+        balances: AvlTreeMap::new(),
         allowed: AvlTreeMap::new(),
-    }
+    };
+
+    initial_state.update_balance(ctx.sender, total_supply);
+    initial_state
 }
 
-/// Represents the type of a transfer.
+/// Individual transfer for use in [`bulk_transfer`].
 #[derive(ReadWriteRPC, CreateTypeSpec)]
 pub struct Transfer {
     /// The address to transfer to.
@@ -198,6 +159,7 @@ pub struct Transfer {
 }
 
 /// Transfers `amount` of tokens to address `to` from the caller.
+///
 /// The function throws if the message caller's account
 /// balance does not have enough tokens to spend.
 /// If the sender's account goes to 0, the sender's address is removed from state.
@@ -218,14 +180,16 @@ pub struct Transfer {
 #[action(shortname = 0x01)]
 pub fn transfer(
     context: ContractContext,
-    state: TokenState,
+    mut state: TokenState,
     to: Address,
     amount: u128,
 ) -> TokenState {
-    core_transfer(context.sender, state, to, amount)
+    state.transfer(context.sender, to, amount);
+    state
 }
 
 /// Transfers a bulk of `amount` of tokens to address `to` from the caller.
+///
 /// The function throws if the message caller's account
 /// balance does not have enough tokens to spend.
 /// If the sender's account goes to 0, the sender's address is removed from state.
@@ -248,12 +212,13 @@ pub fn bulk_transfer(
     transfers: Vec<Transfer>,
 ) -> TokenState {
     for t in transfers {
-        state = core_transfer(context.sender, state, t.to, t.amount);
+        state.transfer(context.sender, t.to, t.amount);
     }
     state
 }
 
-/// Transfers `amount` of tokens from address `from` to address `to`.\
+/// Transfers `amount` of tokens from address `from` to address `to`.
+///
 /// This requires that the sender is allowed to do the transfer by the `from`
 /// account through the `approve` action.
 /// The function throws if the message caller's account
@@ -277,15 +242,17 @@ pub fn bulk_transfer(
 #[action(shortname = 0x03)]
 pub fn transfer_from(
     context: ContractContext,
-    state: TokenState,
+    mut state: TokenState,
     from: Address,
     to: Address,
     amount: u128,
 ) -> TokenState {
-    core_transfer_from(context.sender, state, from, to, amount)
+    state.transfer_from(context.sender, from, to, amount);
+    state
 }
 
-/// Transfers a bulk of `amount` of tokens to address `to` from address `from` .\
+/// Transfers a bulk of `amount` of tokens to address `to` from address `from`.
+///
 /// This requires that the sender is allowed to do the transfer by the `from`
 /// account through the `approve` action.
 /// The function throws if the message caller's account
@@ -312,12 +279,13 @@ pub fn bulk_transfer_from(
     transfers: Vec<Transfer>,
 ) -> TokenState {
     for t in transfers {
-        state = core_transfer_from(context.sender, state, from, t.to, t.amount);
+        state.transfer_from(context.sender, from, t.to, t.amount);
     }
     state
 }
 
 /// Allows `spender` to withdraw from the owners account multiple times, up to the `amount`.
+///
 /// If this function is called again it overwrites the current allowance with `amount`.
 ///
 /// ### Parameters:
@@ -359,90 +327,4 @@ pub fn approve_relative(
 ) -> TokenState {
     state.update_allowance_relative(context.sender, spender, delta);
     state
-}
-
-/// Transfers `amount` of tokens to address `to` from the caller.
-/// The function throws if the message caller's account
-/// balance does not have enough tokens to spend.
-/// If the sender's account goes to 0, the sender's address is removed from state.
-///
-/// ### Parameters:
-///
-/// * `sender`: [`Address`], the sender of the transaction.
-///
-/// * `state`: [`TokenState`], the current state of the contract.
-///
-/// * `to`: [`Address`], the address to transfer to.
-///
-/// * `amount`: [`u128`], amount to transfer.
-///
-/// ### Returns
-///
-/// The new state object of type [`TokenState`] with an updated ledger.
-pub fn core_transfer(
-    sender: Address,
-    mut state: TokenState,
-    to: Address,
-    amount: u128,
-) -> TokenState {
-    let from_amount = state.balance_of(&sender);
-    let o_new_from_amount = from_amount.checked_sub(amount);
-    match o_new_from_amount {
-        Some(new_from_amount) => {
-            state.balances.insert_balance(sender, new_from_amount);
-        }
-        None => {
-            panic!(
-                "Insufficient funds for transfer: {}/{}",
-                from_amount, amount
-            );
-        }
-    }
-    let to_amount = state.balance_of(&to);
-    state.balances.insert_balance(to, to_amount.add(amount));
-    state
-}
-
-/// Transfers `amount` of tokens from address `from` to address `to`.\
-/// This requires that the sender is allowed to do the transfer by the `from`
-/// account through the `approve` action.
-/// The function throws if the message caller's account
-/// balance does not have enough tokens to spend, or if the tokens were not approved.
-///
-/// ### Parameters:
-///
-/// * `sender`: [`Address`], the sender of the transaction.
-///
-/// * `state`: [`TokenState`], the current state of the contract.
-///
-/// * `from`: [`Address`], the address to transfer from.
-///
-/// * `to`: [`Address`], the address to transfer to.
-///
-/// * `amount`: [`u128`], amount to transfer.
-///
-/// ### Returns
-///
-/// The new state object of type [`TokenState`] with an updated ledger.
-pub fn core_transfer_from(
-    sender: Address,
-    mut state: TokenState,
-    from: Address,
-    to: Address,
-    amount: u128,
-) -> TokenState {
-    let from_allowed = state.allowance(&from, &sender);
-    let o_new_allowed_amount = from_allowed.checked_sub(amount);
-    match o_new_allowed_amount {
-        Some(new_allowed_amount) => {
-            state.update_allowance(from, sender, new_allowed_amount);
-        }
-        None => {
-            panic!(
-                "Insufficient allowance for transfer_from: {}/{}",
-                from_allowed, amount
-            );
-        }
-    }
-    core_transfer(from, state, to, amount)
 }

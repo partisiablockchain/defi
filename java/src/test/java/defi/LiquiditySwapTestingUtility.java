@@ -52,11 +52,11 @@ public final class LiquiditySwapTestingUtility {
 
   LiquiditySwapLock.TokensInOut tokenAinBout() {
     return new LiquiditySwapLock.TokensInOut(
-        new LiquiditySwapLock.Token.TokenA(), new LiquiditySwapLock.Token.TokenB());
+        new LiquiditySwapLock.DepositToken.TokenA(), new LiquiditySwapLock.DepositToken.TokenB());
   }
 
   LiquiditySwapLock.TokensInOut tokenBinAout() {
     return new LiquiditySwapLock.TokensInOut(
-        new LiquiditySwapLock.Token.TokenB(), new LiquiditySwapLock.Token.TokenA());
+        new LiquiditySwapLock.DepositToken.TokenB(), new LiquiditySwapLock.DepositToken.TokenA());
   }
 }

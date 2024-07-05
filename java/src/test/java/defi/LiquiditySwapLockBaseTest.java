@@ -167,10 +167,10 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     BigInteger virtualLiquidityFromLocksA = ZERO;
     BigInteger virtualLiquidityFromLocksB = ZERO;
     for (LiquiditySwapLock.LiquidityLock lock : swapState.virtualState().locks().values()) {
-      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.Token.TokenA())) {
+      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositToken.TokenA())) {
         virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.add(lock.amountIn());
         virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.subtract(lock.amountOut());
-      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.Token.TokenB())) {
+      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositToken.TokenB())) {
         virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.subtract(lock.amountOut());
         virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.add(lock.amountIn());
       } else {

@@ -20,7 +20,7 @@ use defi_common::liquidity_util::{
 };
 use defi_common::math::{assert_is_per_mille, u128_sqrt};
 use defi_common::permission::Permission;
-pub use defi_common::token_balances::Token;
+use defi_common::token_balances::DepositToken;
 use defi_common::token_balances::{TokenAmount, TokenBalance, TokenBalances, TokensInOut};
 
 /// Stores data about a lock, which is later used when the lock is executed or cancelled.
@@ -46,8 +46,8 @@ struct LockLiquidity {
 
 impl LockLiquidity {
     /// Retrieves a mutable reference to the amount of `token` held in locks.
-    pub fn get_mut_amount_of(&mut self, token: Token) -> &mut TokenDelta {
-        if token == Token::A {
+    pub fn get_mut_amount_of(&mut self, token: DepositToken) -> &mut TokenDelta {
+        if token == DepositToken::A {
             &mut self.a_tokens
         } else {
             &mut self.b_tokens
@@ -297,7 +297,7 @@ pub fn deposit(
 ///
 /// * `state`: [`LiquiditySwapContractState`] - The current state of the contract.
 ///
-/// * `token`: [`Token`] - Indicating the token of which to add `amount` to.
+/// * `token`: [`DepositToken`] - Indicating the token of which to add `amount` to.
 ///
 /// * `amount`: [`TokenAmount`] - The desired amount to add to the user's total amount of `token`.
 /// ### Returns
@@ -308,7 +308,7 @@ pub fn deposit_callback(
     context: ContractContext,
     callback_context: CallbackContext,
     mut state: LiquiditySwapContractState,
-    token: Token,
+    token: DepositToken,
     amount: TokenAmount,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     assert!(callback_context.success, "Transfer did not succeed");
@@ -512,9 +512,11 @@ pub fn reclaim_liquidity(
 
     let user = &context.sender;
 
-    state
-        .token_balances
-        .deduct_from_token_balance(*user, Token::LIQUIDITY, liquidity_token_amount);
+    state.token_balances.deduct_from_token_balance(
+        *user,
+        DepositToken::LIQUIDITY,
+        liquidity_token_amount,
+    );
 
     let contract_token_balance = state
         .token_balances
@@ -527,15 +529,21 @@ pub fn reclaim_liquidity(
         contract_token_balance.liquidity_tokens,
     );
 
-    state
-        .token_balances
-        .move_tokens(state.liquidity_pool_address, *user, Token::A, a_output);
-    state
-        .token_balances
-        .move_tokens(state.liquidity_pool_address, *user, Token::B, b_output);
+    state.token_balances.move_tokens(
+        state.liquidity_pool_address,
+        *user,
+        DepositToken::A,
+        a_output,
+    );
+    state.token_balances.move_tokens(
+        state.liquidity_pool_address,
+        *user,
+        DepositToken::B,
+        b_output,
+    );
     state.token_balances.deduct_from_token_balance(
         state.liquidity_pool_address,
-        Token::LIQUIDITY,
+        DepositToken::LIQUIDITY,
         liquidity_token_amount,
     );
 
@@ -590,7 +598,7 @@ pub fn provide_initial_liquidity(
     (state, vec![])
 }
 
-/// Saves a lock on the current state of the liquidity pools for Token A and B,
+/// Saves a lock on the current state of the liquidity pools for DepositToken A and B,
 /// implicitly updating the virtual pools.
 ///
 /// A lock acts as a privilege for swapping `amount_in` of `token_in`, and receiving at least
@@ -768,8 +776,8 @@ fn calculate_minimum_swap_to_amount(
         .token_balances
         .get_balance_for(&state.liquidity_pool_address);
 
-    let actual_a = actual_balance.get_amount_of(Token::A);
-    let actual_b = actual_balance.get_amount_of(Token::B);
+    let actual_a = actual_balance.get_amount_of(DepositToken::A);
+    let actual_b = actual_balance.get_amount_of(DepositToken::B);
     let virtual_balance = state
         .virtual_state
         .virtual_liquidity_pools(actual_a, actual_b);
@@ -884,12 +892,14 @@ fn provide_liquidity_internal(
         token_out_amount,
     );
 
-    state
-        .token_balances
-        .add_to_token_balance(*user, Token::LIQUIDITY, minted_liquidity_tokens);
+    state.token_balances.add_to_token_balance(
+        *user,
+        DepositToken::LIQUIDITY,
+        minted_liquidity_tokens,
+    );
     state.token_balances.add_to_token_balance(
         state.liquidity_pool_address,
-        Token::LIQUIDITY,
+        DepositToken::LIQUIDITY,
         minted_liquidity_tokens,
     );
 }

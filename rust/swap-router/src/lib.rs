@@ -16,7 +16,6 @@ use read_write_state_derive::ReadWriteState;
 use read_write_rpc_derive::ReadRPC;
 
 use defi_common::liquidity_util::{AcquiredLiquidityLockInformation, LiquidityLockId};
-pub use defi_common::token_balances::Token;
 use defi_common::token_balances::TokenAmount;
 
 use defi_common::interact_mpc20::MPC20Contract;

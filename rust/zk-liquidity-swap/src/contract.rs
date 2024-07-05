@@ -16,7 +16,9 @@ use read_write_state_derive::ReadWriteState;
 use std::collections::VecDeque;
 
 use defi_common::math::u128_division_ceil;
-use defi_common::token_balances::{Token, TokenAmount, TokenBalance, TokenBalances, TokensInOut};
+use defi_common::token_balances::{
+    DepositToken, TokenAmount, TokenBalance, TokenBalances, TokensInOut,
+};
 
 /**
  * Metadata information associated with each individual variable.
@@ -70,7 +72,8 @@ impl ContractState {
     fn assert_invariants(&self) {
         let pools = self.get_pools();
         assert!(
-            pools.get_amount_of(Token::A) * pools.get_amount_of(Token::B) >= self.swap_constant
+            pools.get_amount_of(DepositToken::A) * pools.get_amount_of(DepositToken::B)
+                >= self.swap_constant
         );
     }
 
@@ -271,7 +274,7 @@ pub fn deposit_callback(
     callback_context: CallbackContext,
     mut state: ContractState,
     _zk_state: ZkState<SecretVarMetadata>,
-    token: Token,
+    token: DepositToken,
     amount: TokenAmount,
 ) -> (ContractState, Vec<EventGroup>) {
     assert!(callback_context.success, "Transfer did not succeed");
@@ -466,10 +469,10 @@ pub fn swap_opened(
 pub struct Swap {
     /// Sender of the swap.
     sender: Address,
-    /// Token to input
-    token_in: Token,
-    /// Token to output
-    token_out: Token,
+    /// DepositToken to input
+    token_in: DepositToken,
+    /// DepositToken to output
+    token_out: DepositToken,
     /// Amount of [`Swap::token_in`] tokens to input.
     amount_in: TokenSwapAmount,
 }
@@ -629,20 +632,20 @@ pub fn close_pools(
     state.token_balances.move_tokens(
         state.liquidity_pool_address,
         state.contract_owner,
-        Token::A,
-        liquidity_pools.get_amount_of(Token::A),
+        DepositToken::A,
+        liquidity_pools.get_amount_of(DepositToken::A),
     );
     state.token_balances.move_tokens(
         state.liquidity_pool_address,
         state.contract_owner,
-        Token::B,
-        liquidity_pools.get_amount_of(Token::B),
+        DepositToken::B,
+        liquidity_pools.get_amount_of(DepositToken::B),
     );
 
     // Assert correctly closed
     let liquidity_pools = state.get_pools();
-    assert_eq!(liquidity_pools.get_amount_of(Token::A), 0);
-    assert_eq!(liquidity_pools.get_amount_of(Token::B), 0);
+    assert_eq!(liquidity_pools.get_amount_of(DepositToken::A), 0);
+    assert_eq!(liquidity_pools.get_amount_of(DepositToken::B), 0);
 
     (state, vec![])
 }
@@ -668,7 +671,7 @@ pub struct AmountAndDirection {
 #[derive(CreateTypeSpec, SecretBinary)]
 #[allow(dead_code)]
 pub struct SecretAmountAndDirection {
-    /// Token amount.
+    /// DepositToken amount.
     amount: Sbi128,
     /// The direction of the token swap. Only the lowest bit is used.
     direction: Sbi8,

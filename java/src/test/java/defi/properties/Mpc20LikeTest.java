@@ -118,7 +118,9 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
                 blockchain.sendAction(
                     account3, tokenContract, Token.transfer(account1, amountAttemptTransfer)))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient funds for transfer: 1/" + amountAttemptTransfer);
+        .hasMessageContaining(
+            "Insufficient COOL tokens for transfer! Have 1, but trying to transfer "
+                + amountAttemptTransfer);
 
     assertThat(balance(account1)).isEqualTo(account1Balance);
     assertThat(balance(account3)).isEqualTo(BigInteger.ONE);
@@ -284,7 +286,9 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
 
     assertThatThrownBy(() -> transferFrom(account2, account1, account3, amount))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from: 100/" + amount);
+        .hasMessageContaining(
+            "Insufficient COOL allowance for transfer_from! Allowed 100, but trying to transfer "
+                + amount);
 
     assertStateInvariants();
     assertThat(allowance(account1, account2)).isEqualTo(BigInteger.valueOf(100));
@@ -303,7 +307,9 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
 
     assertThatThrownBy(() -> transferFrom(account3, account1, account2, amount))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from: 0/" + amount);
+        .hasMessageContaining(
+            "Insufficient COOL allowance for transfer_from! Allowed 0, but trying to transfer "
+                + amount);
 
     assertStateInvariants();
     assertThat(allowance(account1, account2)).isNull();
@@ -319,7 +325,9 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
     byte[] transfer = Token.transfer(account1, BigInteger.ONE);
     assertThatThrownBy(() -> blockchain.sendAction(account3, tokenContract, transfer))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient funds for transfer: 0/1");
+        .hasMessageContaining(
+            "Insufficient COOL tokens for transfer! Have 0, but trying to transfer 1 (in minimal"
+                + " units)");
 
     assertThat(balance(account1)).isEqualTo(account1Balance);
   }
@@ -387,7 +395,9 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
 
     assertThatThrownBy(() -> blockchain.sendAction(account2, tokenContract, bulkTransfer))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient funds for transfer: 0/1");
+        .hasMessageContaining(
+            "Insufficient COOL tokens for transfer! Have 0, but trying to transfer 1 (in minimal"
+                + " units)");
 
     assertStateInvariants();
     assertThat(balance(account2)).isEqualTo(BigInteger.ONE);

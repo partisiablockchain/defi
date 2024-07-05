@@ -124,7 +124,9 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     // Send deposit
     Assertions.assertThatCode(() -> deposit(users.get(0), amountDeposit))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from: 1000/1001");
+        .hasMessageContaining(
+            "Insufficient AAA allowance for transfer_from! Allowed 1000, but trying to transfer"
+                + " 1001");
 
     assertTokenAaaBalance(users.get(0), TOTAL_SUPPLY);
     assertTokenAaaBalance(contractUnderTestAddress, 0L);
@@ -196,7 +198,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     Assertions.assertThatCode(() -> deposit(users.get(0), amount))
         .as("amount = " + amount)
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient funds for transfer: 98000/" + amount);
+        .hasMessageContaining(
+            "Insufficient AAA tokens for transfer! Have 98000, but trying to transfer " + amount);
 
     assertTokenAaaBalance(users.get(0), 98_000L);
     assertTokenAaaBalance(contractUnderTestAddress, 1_000L);

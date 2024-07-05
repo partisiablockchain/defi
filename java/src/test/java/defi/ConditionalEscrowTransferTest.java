@@ -128,7 +128,9 @@ public final class ConditionalEscrowTransferTest extends JunitContractTest {
     Assertions.assertThatThrownBy(
             () -> blockchain.sendAction(sender, conditionalEscrow, depositHundredRpc))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining("Insufficient allowance for transfer_from");
+        .hasMessageContaining(
+            "Insufficient DOGE allowance for transfer_from! Allowed 1000, but trying to transfer"
+                + " 10000");
     ConditionalEscrowTransfer.ContractState state =
         ConditionalEscrowTransfer.ContractState.deserialize(
             blockchain.getContractState(conditionalEscrow));
