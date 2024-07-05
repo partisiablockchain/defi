@@ -147,7 +147,9 @@ public final class MoccaTest extends JunitContractTest {
     TxExecution transferEvent = blockchain.executeEventAsync(escrowEvent.getContractInteraction());
 
     assertThat(transferEvent.getFailureCause().getErrorMessage())
-        .contains("Insufficient allowance for transfer_from: 1000000/2000000");
+        .contains(
+            "Insufficient USDC allowance for transfer_from! Allowed 1000000, but trying to transfer"
+                + " 2000000 (in minimal units)");
 
     TxExecution systemCallback = blockchain.executeEventAsync(transferEvent.getSystemCallback());
     TxExecution callbackEscrow = blockchain.executeEvent(systemCallback.getContractCallback());
@@ -599,7 +601,9 @@ public final class MoccaTest extends JunitContractTest {
     TxExecution transferEvent = blockchain.executeEventAsync(executeEvent.getContractInteraction());
 
     assertThat(transferEvent.getFailureCause().getErrorMessage())
-        .contains("Insufficient funds for transfer: 0/1000");
+        .contains(
+            "Insufficient USDC tokens for transfer! Have 0, but trying to transfer 1000 (in minimal"
+                + " units)");
 
     blockchain.executeEvent(transferEvent.getSystemCallback());
 

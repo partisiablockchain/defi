@@ -3,9 +3,9 @@ use proptest::prelude::*;
 
 #[test]
 fn test_token_clone() {
-    assert_eq!(Token::A, Token::A.clone());
-    assert_eq!(Token::B, Token::B.clone());
-    assert_eq!(Token::LIQUIDITY, Token::LIQUIDITY.clone());
+    assert_eq!(DepositToken::A, DepositToken::A.clone());
+    assert_eq!(DepositToken::B, DepositToken::B.clone());
+    assert_eq!(DepositToken::LIQUIDITY, DepositToken::LIQUIDITY.clone());
 }
 
 fn generic_test_calculate_swap_to_amount(input_a: TokenAmount) {

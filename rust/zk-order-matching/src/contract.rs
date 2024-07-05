@@ -11,7 +11,7 @@ use pbc_contract_common::zk::{CalculationStatus, SecretVarId, ZkInputDef, ZkStat
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 use std::collections::VecDeque;
-use token_balances::{Token, TokenAmount, TokenBalances};
+use token_balances::{DepositToken, TokenAmount, TokenBalances};
 
 pub mod zk_compute;
 
@@ -67,13 +67,13 @@ impl ContractState {
         self.token_balances.move_tokens(
             order_match.a_seller,
             order_match.a_buyer,
-            Token::A,
+            DepositToken::A,
             order_match.amount_a,
         );
         self.token_balances.move_tokens(
             order_match.a_buyer,
             order_match.a_seller,
-            Token::B,
+            DepositToken::B,
             order_match.amount_b,
         );
     }
@@ -163,7 +163,7 @@ pub fn deposit(
 ///
 /// * `state`: [`ContractState`] - The current state of the contract.
 ///
-/// * `token`: [`Token`] - Indicating the token of which to add `amount` to.
+/// * `token`: [`DepositToken`] - Indicating the token of which to add `amount` to.
 ///
 /// * `amount`: [`TokenAmount`] - The desired amount to add to the user's total amount of `token`.
 /// ### Returns
@@ -175,7 +175,7 @@ pub fn deposit_callback(
     callback_context: CallbackContext,
     mut state: ContractState,
     _zk_state: ZkState<zk_compute::VarMetadata>,
-    token: Token,
+    token: DepositToken,
     amount: TokenAmount,
 ) -> (ContractState, Vec<EventGroup>) {
     assert!(callback_context.success, "Transfer did not succeed");

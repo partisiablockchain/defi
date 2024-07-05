@@ -994,7 +994,8 @@ public abstract class RoutingTest extends JunitContractTest {
     Assertions.assertThat(s2.getContractInteraction().getFailureCause().getErrorMessage())
         .contains(
             String.format(
-                "Insufficient allowance for transfer_from: 0/%s", NON_OWNER_TOKEN_AMOUNT_A));
+                "Insufficient A allowance for transfer_from! Allowed 0, but trying to transfer %s",
+                NON_OWNER_TOKEN_AMOUNT_A));
 
     // Handle callback to allow router to throw error.
     TxExecution s4 = executeEventAsync(s3.getSystemCallback());
@@ -1037,7 +1038,7 @@ public abstract class RoutingTest extends JunitContractTest {
     Assertions.assertThat(s2.getContractInteraction().getFailureCause().getErrorMessage())
         .contains(
             String.format(
-                "Insufficient allowance for transfer_from: %s/%s",
+                "Insufficient A allowance for transfer_from! Allowed %s, but trying to transfer %s",
                 NON_OWNER_TOKEN_AMOUNT_A, NON_OWNER_TOKEN_AMOUNT_A.add(BigInteger.ONE)));
 
     // Handle callback to allow router to throw error.
