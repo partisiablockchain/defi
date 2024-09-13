@@ -33,6 +33,7 @@ public final class MoccaTest extends JunitContractTest {
       BigInteger.valueOf(1200).multiply(BigInteger.TEN.pow(18));
   private BlockchainAddress token;
   private BlockchainAddress mocca;
+  private Mocca moccaContract;
 
   private BlockchainAddress tokenOwner;
   private BlockchainAddress escrowUser;
@@ -75,16 +76,17 @@ public final class MoccaTest extends JunitContractTest {
     final byte[] initMocca = Mocca.initialize(criteria, token);
 
     mocca = blockchain.deployContract(voter1, MOCCA_CONTRACT, initMocca);
+    moccaContract = new Mocca(getStateClient(), mocca);
 
     transfer(token, tokenOwner, escrowUser, BigInteger.valueOf(1_000_000L));
     approve(tokenOwner, token, mocca, BigInteger.valueOf(10_000_000));
     approve(escrowUser, token, mocca, BigInteger.valueOf(1_000_000));
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.criteria().voters().size()).isEqualTo(4);
     assertThat(moccaState.amountOfTokens()).isEqualTo(BigInteger.ZERO);
-    assertThat(moccaState.proposal().size()).isEqualTo(0);
+    assertThat(moccaState.proposal().getNextN(null, 100).size()).isEqualTo(0);
     assertThat(totalVoteWeight(moccaState)).isEqualTo(60);
   }
 
@@ -131,7 +133,7 @@ public final class MoccaTest extends JunitContractTest {
     byte[] escrowTokens = Mocca.escrow(amount);
     blockchain.sendAction(escrowUser, mocca, escrowTokens);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.amountOfTokens()).isEqualTo(amount);
   }
@@ -158,7 +160,7 @@ public final class MoccaTest extends JunitContractTest {
         .contains(
             "Could not escrow 2000000 tokens, from 00B2E734B5D8DA089318D0D2B076C19F59C450855A.");
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
     assertThat(moccaState.amountOfTokens()).isEqualTo(BigInteger.ZERO);
   }
 
@@ -169,15 +171,15 @@ public final class MoccaTest extends JunitContractTest {
   void proposeTransfer() {
 
     byte[] proposeTransfer =
-        Mocca.propose(new Mocca.ProposalType.Transfer(BigInteger.valueOf(1000L), receivingUser));
+        Mocca.propose(new Mocca.ProposalTypeTransfer(BigInteger.valueOf(1000L), receivingUser));
 
     blockchain.sendAction(escrowUser, mocca, proposeTransfer);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().size()).isEqualTo(1);
+    assertThat(moccaState.proposal().getNextN(null, 100).size()).isEqualTo(1);
     assertThat(moccaState.proposal().get(0).proposalType())
-        .isInstanceOf(Mocca.ProposalType.Transfer.class);
+        .isInstanceOf(Mocca.ProposalTypeTransfer.class);
   }
 
   /**
@@ -189,12 +191,12 @@ public final class MoccaTest extends JunitContractTest {
 
     setupTransferProposal();
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
     Token.TokenState tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
@@ -206,9 +208,9 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
     proposal = moccaState.proposal().get(0);
-    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResult.Approved.class);
+    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResultApproved.class);
 
     tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
     assertThat(tokenState.balances().get(receivingUser)).isEqualTo(1000);
@@ -224,11 +226,11 @@ public final class MoccaTest extends JunitContractTest {
     setupTransferProposal();
     Mocca.MoccaState moccaState;
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     blockchain.sendAction(voter1, mocca, noVote);
     blockchain.sendAction(voter4, mocca, noVote);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
     Token.TokenState tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
@@ -241,11 +243,11 @@ public final class MoccaTest extends JunitContractTest {
 
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
     tokenState = Token.TokenState.deserialize(blockchain.getContractState(token));
     proposal = moccaState.proposal().get(0);
 
-    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResult.Denied.class);
+    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResultDenied.class);
     assertThat(tokenState.balances().get(receivingUser)).isNull();
     assertThat(moccaState.amountOfTokens()).isEqualTo(BigInteger.valueOf(10_000L));
   }
@@ -256,11 +258,11 @@ public final class MoccaTest extends JunitContractTest {
     byte[] escrowTokens = Mocca.escrow(amount);
     blockchain.sendAction(escrowUser, mocca, escrowTokens);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
     assertThat(moccaState.amountOfTokens()).isEqualTo(BigInteger.valueOf(10_000L));
 
     byte[] proposeTransfer =
-        Mocca.propose(new Mocca.ProposalType.Transfer(BigInteger.valueOf(1000L), receivingUser));
+        Mocca.propose(new Mocca.ProposalTypeTransfer(BigInteger.valueOf(1000L), receivingUser));
 
     blockchain.sendAction(escrowUser, mocca, proposeTransfer);
   }
@@ -275,15 +277,15 @@ public final class MoccaTest extends JunitContractTest {
         List.of(
             new Mocca.Voter(voter1, 5), new Mocca.Voter(voter2, 6), new Mocca.Voter(voter3, 10));
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 11);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     blockchain.sendAction(escrowUser, mocca, proposeNewCriteria);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().size()).isEqualTo(1);
+    assertThat(moccaState.proposal().getNextN(null, 100).size()).isEqualTo(1);
     assertThat(moccaState.proposal().get(0).proposalType())
-        .isInstanceOf(Mocca.ProposalType.NewCriteria.class);
+        .isInstanceOf(Mocca.ProposalTypeNewCriteria.class);
     assertThat(moccaState.proposal().get(0).result()).isNull();
   }
 
@@ -298,16 +300,16 @@ public final class MoccaTest extends JunitContractTest {
         List.of(
             new Mocca.Voter(voter1, 5), new Mocca.Voter(voter2, 6), new Mocca.Voter(voter3, 10));
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 11);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     blockchain.sendAction(escrowUser, mocca, proposeNewCriteria);
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
 
@@ -317,11 +319,11 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
     proposal = moccaState.proposal().get(0);
 
     assertThat(moccaState.criteria()).isEqualTo(newCriteria);
-    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResult.Approved.class);
+    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResultApproved.class);
   }
 
   /**
@@ -335,16 +337,16 @@ public final class MoccaTest extends JunitContractTest {
         List.of(
             new Mocca.Voter(voter1, 5), new Mocca.Voter(voter2, 6), new Mocca.Voter(voter3, 10));
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 11);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     blockchain.sendAction(escrowUser, mocca, proposeNewCriteria);
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     blockchain.sendAction(voter2, mocca, noVote);
     blockchain.sendAction(voter3, mocca, noVote);
     blockchain.sendAction(voter4, mocca, noVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
     final Mocca.Criteria originCriteria = moccaState.criteria();
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
@@ -355,10 +357,10 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
     proposal = moccaState.proposal().get(0);
 
-    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResult.Denied.class);
+    assertThat(proposal.result()).isInstanceOf(Mocca.VoteResultDenied.class);
     assertThat(moccaState.criteria()).isNotEqualTo(newCriteria);
     assertThat(moccaState.criteria()).isEqualTo(originCriteria);
   }
@@ -368,7 +370,7 @@ public final class MoccaTest extends JunitContractTest {
   void newCriteriaWithEmptyListOfVoters() {
     List<Mocca.Voter> voterWeights = List.of();
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 11);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     assertThatThrownBy(() -> blockchain.sendAction(escrowUser, mocca, proposeNewCriteria))
         .hasMessageContaining("Cannot use a criteria without assigned voters.");
@@ -384,7 +386,7 @@ public final class MoccaTest extends JunitContractTest {
         List.of(
             new Mocca.Voter(voter1, 5), new Mocca.Voter(voter2, 6), new Mocca.Voter(voter3, 10));
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 22);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     assertThatThrownBy(() -> blockchain.sendAction(escrowUser, mocca, proposeNewCriteria))
         .hasMessageContaining("Threshold cannot be larger then the total weight of votes.");
@@ -396,10 +398,10 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeNewCriteria")
   void voteYesToNewCriteria() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
     assertThat(proposal.votes().size()).isEqualTo(1);
@@ -409,10 +411,10 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeTransfer")
   void voteYesToTransferProposal() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     Mocca.Proposal proposal = moccaState.proposal().get(0);
     assertThat(proposal.votes().size()).isEqualTo(1);
@@ -422,7 +424,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "deployMocca")
   void voteOnNonExistingProposal() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     assertThatThrownBy(() -> blockchain.sendAction(voter1, mocca, yesVote))
         .hasMessageContaining("No proposal with id 0");
   }
@@ -431,7 +433,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeTransfer")
   void userNotRegisteredAsVoterCannotVote() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     assertThatThrownBy(() -> blockchain.sendAction(escrowUser, mocca, yesVote))
         .hasMessageContaining("Only addresses registered in the criteria as voters can vote.");
   }
@@ -440,21 +442,21 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeTransfer")
   void voterCanChangeVote() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().size()).isEqualTo(1);
+    assertThat(moccaState.proposal().getNextN(null, 100).size()).isEqualTo(1);
     assertThat(moccaState.proposal().get(0).votes().get(voter1).discriminant())
         .isEqualTo(Mocca.VoteD.YES);
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     blockchain.sendAction(voter1, mocca, noVote);
 
-    moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().size()).isEqualTo(1);
+    assertThat(moccaState.proposal().getNextN(null, 100).size()).isEqualTo(1);
     assertThat(moccaState.proposal().get(0).votes().get(voter1).discriminant())
         .isEqualTo(Mocca.VoteD.NO);
   }
@@ -463,7 +465,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeNewCriteria")
   void voterCannotVoteOnProposalWithResult() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
@@ -471,7 +473,7 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     assertThatThrownBy(() -> blockchain.sendAction(voter1, mocca, noVote))
         .hasMessageContaining("Cannot vote on proposal that has been executed.");
   }
@@ -480,7 +482,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeNewCriteria")
   void weightOfYesVotesIsEqualToThreshold() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
@@ -488,16 +490,16 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().get(0).result()).isInstanceOf(Mocca.VoteResult.Approved.class);
+    assertThat(moccaState.proposal().get(0).result()).isInstanceOf(Mocca.VoteResultApproved.class);
   }
 
   /** A voting with the weight of "No" votes equal to the threshold is inconclusive. */
   @ContractTest(previous = "proposeTransfer")
   void weightOfNoVotesIsEqualToThreshold() {
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     blockchain.sendAction(voter1, mocca, noVote);
     blockchain.sendAction(voter2, mocca, noVote);
     blockchain.sendAction(voter3, mocca, noVote);
@@ -506,7 +508,7 @@ public final class MoccaTest extends JunitContractTest {
     assertThatThrownBy(() -> blockchain.sendAction(voter4, mocca, executeProposal))
         .hasMessageContaining("The voting was not conclusive.");
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.proposal().get(0).result()).isNull();
   }
@@ -515,7 +517,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeTransfer")
   void weightOfNoVotesLargerThanThreshold() {
 
-    byte[] noVote = Mocca.vote(0, new Mocca.Vote.No());
+    byte[] noVote = Mocca.vote(0, new Mocca.VoteNo());
     blockchain.sendAction(voter2, mocca, noVote);
     blockchain.sendAction(voter3, mocca, noVote);
     blockchain.sendAction(voter4, mocca, noVote);
@@ -523,9 +525,9 @@ public final class MoccaTest extends JunitContractTest {
     byte[] executeProposal = Mocca.execute(0);
     blockchain.sendAction(voter4, mocca, executeProposal);
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
-    assertThat(moccaState.proposal().get(0).result()).isInstanceOf(Mocca.VoteResult.Denied.class);
+    assertThat(moccaState.proposal().get(0).result()).isInstanceOf(Mocca.VoteResultDenied.class);
   }
 
   /** Votes from a prior voter list does not count, when a new criteria is instated. */
@@ -535,21 +537,21 @@ public final class MoccaTest extends JunitContractTest {
         List.of(
             new Mocca.Voter(voter1, 5), new Mocca.Voter(voter2, 6), new Mocca.Voter(voter3, 10));
     Mocca.Criteria newCriteria = new Mocca.Criteria(voterWeights, 11);
-    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalType.NewCriteria(newCriteria));
+    byte[] proposeNewCriteria = Mocca.propose(new Mocca.ProposalTypeNewCriteria(newCriteria));
 
     blockchain.sendAction(escrowUser, mocca, proposeNewCriteria);
 
     byte[] proposeTransfer =
-        Mocca.propose(new Mocca.ProposalType.Transfer(BigInteger.valueOf(1000L), receivingUser));
+        Mocca.propose(new Mocca.ProposalTypeTransfer(BigInteger.valueOf(1000L), receivingUser));
 
     blockchain.sendAction(escrowUser, mocca, proposeTransfer);
 
-    byte[] yesVoteNewCriteria = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVoteNewCriteria = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVoteNewCriteria);
     blockchain.sendAction(voter2, mocca, yesVoteNewCriteria);
     blockchain.sendAction(voter3, mocca, yesVoteNewCriteria);
 
-    byte[] yesVoteTransfer = Mocca.vote(1, new Mocca.Vote.Yes());
+    byte[] yesVoteTransfer = Mocca.vote(1, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVoteTransfer);
     blockchain.sendAction(voter4, mocca, yesVoteTransfer);
 
@@ -560,7 +562,7 @@ public final class MoccaTest extends JunitContractTest {
     assertThatThrownBy(() -> blockchain.sendAction(voter4, mocca, executeTransfer))
         .hasMessageContaining("The voting was not conclusive.");
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.proposal().get(1).result()).isNull();
     assertThat(moccaState.proposal().get(1).votes().size()).isEqualTo(2);
@@ -572,7 +574,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeNewCriteria")
   void executeAnAlreadyExecutedProposal() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
@@ -590,7 +592,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeTransfer")
   void executeTransferProposalWithInsufficientFunds() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
@@ -607,7 +609,7 @@ public final class MoccaTest extends JunitContractTest {
 
     blockchain.executeEvent(transferEvent.getSystemCallback());
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.proposal().get(0).result()).isNull();
     assertThat(moccaState.amountOfTokens()).isEqualTo(0);
@@ -621,7 +623,7 @@ public final class MoccaTest extends JunitContractTest {
     byte[] escrowTokens = Mocca.escrow(amount);
     blockchain.sendAction(escrowUser, mocca, escrowTokens);
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);
@@ -638,7 +640,7 @@ public final class MoccaTest extends JunitContractTest {
 
     blockchain.executeEvent(transferEvent.getSystemCallback());
 
-    Mocca.MoccaState moccaState = Mocca.MoccaState.deserialize(blockchain.getContractState(mocca));
+    Mocca.MoccaState moccaState = moccaContract.getState();
 
     assertThat(moccaState.proposal().get(0).result()).isNull();
     assertThat(moccaState.amountOfTokens()).isEqualTo(10_000);
@@ -648,7 +650,7 @@ public final class MoccaTest extends JunitContractTest {
   @ContractTest(previous = "proposeNewCriteria")
   void executeNonexistingProposal() {
 
-    byte[] yesVote = Mocca.vote(0, new Mocca.Vote.Yes());
+    byte[] yesVote = Mocca.vote(0, new Mocca.VoteYes());
     blockchain.sendAction(voter1, mocca, yesVote);
     blockchain.sendAction(voter2, mocca, yesVote);
     blockchain.sendAction(voter3, mocca, yesVote);

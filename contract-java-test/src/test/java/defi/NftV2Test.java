@@ -7,6 +7,7 @@ import defi.properties.Mpc721LikeTest;
 import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
 
 /** NFT v2 contract test. */
@@ -25,8 +26,7 @@ public final class NftV2Test {
 
     @Override
     protected Mpc721LikeState getState() {
-      return new Mpc721State(
-          NftV2Contract.NFTContractState.deserialize(blockchain.getContractState(contractAddress)));
+      return new Mpc721State(new NftV2Contract(getStateClient(), contractAddress).getState());
     }
 
     @Override
@@ -48,7 +48,8 @@ public final class NftV2Test {
 
       @Override
       public Map<BigInteger, BlockchainAddress> owners() {
-        return state.owners();
+        return state.owners().getNextN(null, 1000).stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
 
       @Override
@@ -58,14 +59,14 @@ public final class NftV2Test {
 
       @Override
       public Map<BigInteger, BlockchainAddress> tokenApprovals() {
-        return state.tokenApprovals();
+        return state.tokenApprovals().getNextN(null, 1000).stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
 
       @Override
       public boolean isApprovedForAll(BlockchainAddress owner, BlockchainAddress operator) {
-        return state
-            .operatorApprovals()
-            .containsKey(new NftV2Contract.OperatorApproval(owner, operator));
+        return state.operatorApprovals().get(new NftV2Contract.OperatorApproval(owner, operator))
+            != null;
       }
 
       @Override

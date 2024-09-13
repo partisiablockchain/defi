@@ -18,6 +18,7 @@ import com.partisiablockchain.language.testenvironment.zk.node.task.PendingInput
 import com.secata.stream.CompactBitArray;
 import java.math.BigInteger;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.assertj.core.api.Assertions;
 
 /** Testing of {@link ZkLiquiditySwap}. */
@@ -108,7 +109,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     ZkLiquiditySwap.TokenBalances b = state.tokenBalances();
     Assertions.assertThat(b.tokenAAddress()).isEqualTo(contractTokenA);
     Assertions.assertThat(b.tokenBAddress()).isEqualTo(contractTokenB);
-    Assertions.assertThat(b.balances()).isEmpty();
+    Assertions.assertThat(b.balances().getNextN(null, 100)).isEmpty();
   }
 
   /** Tests that contract owner can deposit, and a new account is created. */
@@ -649,8 +650,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
   }
 
   private ZkLiquiditySwap.ContractState getSwapState() {
-    return ZkLiquiditySwap.ContractState.deserialize(
-        blockchain.getContractState(swapContractAddress));
+    return new ZkLiquiditySwap(getStateClient(), swapContractAddress).getState();
   }
 
   private Token.TokenState getTokenState(BlockchainAddress tokenAddress) {
@@ -740,7 +740,8 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
   }
 
   private Map<BlockchainAddress, ZkLiquiditySwap.TokenBalance> getDepositBalances() {
-    return getSwapState().tokenBalances().balances();
+    return getSwapState().tokenBalances().balances().getNextN(null, 1000).stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
   private ZkLiquiditySwap.TokenBalance createBalance(BigInteger amountA, BigInteger amountB) {

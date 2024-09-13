@@ -32,7 +32,8 @@ public final class LiquiditySwapTestingUtility {
       LiquiditySwapLock.LiquiditySwapContractState state, BlockchainAddress address) {
     LiquiditySwapLock.TokenBalance virtualBalance = getActualContractBalance(state, address);
 
-    for (LiquiditySwapLock.LiquidityLock lock : state.virtualState().locks().values()) {
+    for (var entry : state.virtualState().locks().getNextN(null, 1000)) {
+      LiquiditySwapLock.LiquidityLock lock = entry.getValue();
       if (lock.tokensInOut().equals(tokenAinBout())) {
         virtualBalance =
             new LiquiditySwapLock.TokenBalance(
@@ -52,11 +53,11 @@ public final class LiquiditySwapTestingUtility {
 
   LiquiditySwapLock.TokensInOut tokenAinBout() {
     return new LiquiditySwapLock.TokensInOut(
-        new LiquiditySwapLock.DepositToken.TokenA(), new LiquiditySwapLock.DepositToken.TokenB());
+        new LiquiditySwapLock.DepositTokenTokenA(), new LiquiditySwapLock.DepositTokenTokenB());
   }
 
   LiquiditySwapLock.TokensInOut tokenBinAout() {
     return new LiquiditySwapLock.TokensInOut(
-        new LiquiditySwapLock.DepositToken.TokenB(), new LiquiditySwapLock.DepositToken.TokenA());
+        new LiquiditySwapLock.DepositTokenTokenB(), new LiquiditySwapLock.DepositTokenTokenA());
   }
 }

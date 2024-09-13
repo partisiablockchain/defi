@@ -41,6 +41,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
   public BlockchainAddress brokeUser;
   public List<BlockchainAddress> users;
   public BlockchainAddress contractOrderMatch;
+  private ZkOrderMatching orderMatchContract;
 
   public BlockchainAddress contractTokenA;
   public BlockchainAddress contractTokenB;
@@ -74,6 +75,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     final byte[] initRpc = ZkOrderMatching.initialize(contractTokenA, contractTokenB);
     contractOrderMatch =
         blockchain.deployZkContract(creatorAddress, contractBytesOrderMatch, initRpc);
+    orderMatchContract = new ZkOrderMatching(getStateClient(), contractOrderMatch);
   }
 
   /** Creator can deposit some tokens. */
@@ -96,8 +98,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     depositAmount(users, contractTokenB, AMOUNT_FOR_INITIAL_DEPOSIT);
 
     // Check state
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     for (final BlockchainAddress user : users) {
       assertDepositBalances(user, AMOUNT_FOR_INITIAL_DEPOSIT, AMOUNT_FOR_INITIAL_DEPOSIT);
     }
@@ -113,8 +114,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 20, 10);
 
     //
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(1);
   }
 
@@ -123,8 +123,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
   void matchingOrder() {
     placeOrder(users.get(2), contractTokenB, 10, 20);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
 
     assertThat(state.ordersStored()).isEqualTo(0);
     assertDepositBalances(users.get(1), 1020, 990);
@@ -140,8 +139,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 10, 22);
     placeOrder(users.get(2), contractTokenB, 20, 10);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(0);
 
     assertThat(state.ordersStored()).isEqualTo(0);
@@ -155,8 +153,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 10, 23);
     placeOrder(users.get(2), contractTokenB, 20, 11);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(0);
 
     assertThat(state.ordersStored()).isEqualTo(0);
@@ -170,8 +167,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 10, 20 - 1);
     placeOrder(users.get(2), contractTokenB, 20, 10 - 1);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
 
     assertThat(state.ordersStored()).isEqualTo(2);
     assertDepositBalances(users.get(1), 1000, 1000);
@@ -184,8 +180,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 10, 20);
     placeOrder(users.get(2), contractTokenB, 20, 10 - 1);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(2);
     assertDepositBalances(users.get(1), 1000, 1000);
     assertDepositBalances(users.get(2), 1000, 1000);
@@ -197,8 +192,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 10, 20 - 1);
     placeOrder(users.get(2), contractTokenB, 20, 10);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(2);
     assertDepositBalances(users.get(1), 1000, 1000);
     assertDepositBalances(users.get(2), 1000, 1000);
@@ -212,8 +206,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     placeOrder(users.get(1), contractTokenA, 20, 1010);
     placeOrder(users.get(2), contractTokenB, 1000, 20);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(2);
     assertDepositBalances(users.get(1), 1000, 1000);
     assertDepositBalances(users.get(2), 1000, 1000);
@@ -224,8 +217,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
   void canRecoverFromLowDeposit() {
     placeOrder(users.get(1), contractTokenA, 20, 1000);
 
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(1);
     assertDepositBalances(users.get(1), 1020, 0);
     assertDepositBalances(users.get(2), 980, 2000);
@@ -243,8 +235,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     zkNodes.finishTasks();
 
     //
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(users.size());
   }
 
@@ -256,8 +247,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     }
 
     //
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(0);
   }
 
@@ -273,8 +263,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     zkNodes.finishTasks();
 
     //
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(0);
   }
 
@@ -291,8 +280,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
     zkNodes.finishTasks();
 
     //
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(state.ordersStored()).isEqualTo(0);
   }
 
@@ -373,16 +361,15 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
 
   /** State accessor for token balances. */
   BigInteger depositBalance(BlockchainAddress owner, BlockchainAddress tokenAddr) {
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     return depositBalance(state, owner, tokenAddr);
   }
 
   /** State validation. */
   void validateStateInvariants(final ZkOrderMatching.ContractState state) {
     // Check that no accounts are empty
-    for (final ZkOrderMatching.TokenBalance tokenBalance :
-        state.tokenBalances().balances().values()) {
+    for (final var entry : state.tokenBalances().balances().getNextN(null, 1000)) {
+      ZkOrderMatching.TokenBalance tokenBalance = entry.getValue();
       final List<BigInteger> hasAnyTokens = List.of(tokenBalance.aTokens(), tokenBalance.bTokens());
       assertThat(hasAnyTokens)
           .as("TokenBalance must contain at least one non-zero field")
@@ -403,8 +390,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
 
   /** State validation. */
   void validateStateInvariants() {
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     validateStateInvariants(state);
   }
 
@@ -414,8 +400,7 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
 
   private void assertDepositBalances(
       BlockchainAddress user, BigInteger amountTokenA, BigInteger amountTokenB) {
-    final ZkOrderMatching.ContractState state =
-        ZkOrderMatching.ContractState.deserialize(blockchain.getContractState(contractOrderMatch));
+    final ZkOrderMatching.ContractState state = orderMatchContract.getState();
     assertThat(depositBalance(state, user, contractTokenA))
         .as("Token A Balance")
         .isEqualTo(amountTokenA);

@@ -111,7 +111,7 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
     // Deploy the LiquiditySwapContract.
     byte[] initRpcSwapAtoB =
         LiquiditySwapLock.initialize(
-            contractTokenA, contractTokenB, FEE, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenA, contractTokenB, FEE, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressAtoB =
         blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwapAtoB);
 
@@ -131,7 +131,7 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
             contractTokenA,
             contractTokenB,
             FEE,
-            new LiquiditySwapLock.Permission.Specific(List.of(nonOwnerAddress1)));
+            new LiquiditySwapLock.PermissionSpecific(List.of(nonOwnerAddress1)));
     swapLockContractAddressAtoB =
         blockchain.deployContract(contractOwnerAddress, CONTRACT_BYTES, initRpcSwapAtoB);
 
@@ -203,15 +203,14 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
     LiquiditySwapLock.TokenBalances b = state.tokenBalances();
     Assertions.assertThat(b.tokenAAddress()).isEqualTo(contractTokenA);
     Assertions.assertThat(b.tokenBAddress()).isEqualTo(contractTokenB);
-    Assertions.assertThat(b.balances())
-        .containsEntry(
-            swapLockContractAddressAtoB,
+    Assertions.assertThat(b.balances().get(swapLockContractAddressAtoB))
+        .isEqualTo(
             new LiquiditySwapLock.TokenBalance(
                 INITIAL_LIQUIDITY_A, INITIAL_LIQUIDITY_B, INITIAL_LIQUIDITY_TOKENS_AB));
 
     // Check initial state of virtual balances.
     LiquiditySwapLock.VirtualState vb = state.virtualState();
-    Assertions.assertThat(vb.locks()).isEmpty();
+    Assertions.assertThat(vb.locks().getNextN(null, 100)).isEmpty();
     Assertions.assertThat(vb.nextLockId())
         .isEqualTo(new LiquiditySwapLock.LiquidityLockId(BigInteger.ZERO));
   }

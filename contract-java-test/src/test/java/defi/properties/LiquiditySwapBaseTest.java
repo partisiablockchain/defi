@@ -6,6 +6,7 @@ import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.assertj.core.api.Assertions;
 
@@ -70,8 +71,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   protected final BigInteger swapDepositBalance(
       BlockchainAddress owner, BlockchainAddress tokenAddr) {
     final LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     return swapDepositBalance(state, owner, tokenAddr);
   }
 
@@ -83,8 +83,8 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   protected final void validateStateInvariants(
       final LiquiditySwap.LiquiditySwapContractState state) {
     // Check that no accounts are empty
-    for (final LiquiditySwap.TokenBalance tokenBalance :
-        state.tokenBalances().balances().values()) {
+    for (final var entry : state.tokenBalances().balances().getNextN(null, 1000)) {
+      LiquiditySwap.TokenBalance tokenBalance = entry.getValue();
       final List<BigInteger> hasAnyTokens =
           List.of(tokenBalance.aTokens(), tokenBalance.bTokens(), tokenBalance.liquidityTokens());
       Assertions.assertThat(hasAnyTokens)
@@ -94,7 +94,8 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
 
     // Check that liquidity tokens are correctly tracked.
     final BigInteger allLiquidityTokensIncludingBuiltInSum =
-        state.tokenBalances().balances().values().stream()
+        state.tokenBalances().balances().getNextN(null, 1000).stream()
+            .map(Map.Entry::getValue)
             .map(LiquiditySwap.TokenBalance::liquidityTokens)
             .collect(Collectors.reducing(BigInteger.ZERO, BigInteger::add));
     final BigInteger liquidityTokenBuiltInSum =
@@ -121,8 +122,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
   /** State validation. */
   protected final void validateStateInvariants() {
     final LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     validateStateInvariants(state);
   }
 
@@ -134,8 +134,7 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
    */
   protected final BigInteger exchangeRate(int precision) {
     final LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     final var aTokens =
         swapDepositBalance(
             state, state.liquidityPoolAddress(), state.tokenBalances().tokenAAddress());

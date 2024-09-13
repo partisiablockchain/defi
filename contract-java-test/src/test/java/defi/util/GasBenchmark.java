@@ -66,7 +66,7 @@ public final class GasBenchmark {
       stateTierUpgrader.accept(stateSize);
 
       final int stateSizeInBytes =
-          blockchain.getContractState(testCases.get(0).contractAddress()).state().length;
+          blockchain.getContractState(testCases.get(0).contractAddress()).length;
       printStream.print("%s\t%s".formatted(stateSize, stateSizeInBytes));
 
       for (final TestCase testCase : testCases) {
@@ -140,7 +140,7 @@ public final class GasBenchmark {
     long gasMinimum = 0L;
     long gasMaximum = 100L;
     boolean successYet = false;
-    final int expectedStateSize = blockchain.getContractState(contract).state().length;
+    final int expectedStateSize = blockchain.getContractState(contract).length;
     Duration durationOfLastSuccessful = null;
 
     while (!successYet || gasMinimum < gasMaximum - 1) {
@@ -168,7 +168,7 @@ public final class GasBenchmark {
         gasMinimum = gasAmount;
       }
 
-      final int currentStateSize = blockchain.getContractState(contract).state().length;
+      final int currentStateSize = blockchain.getContractState(contract).length;
 
       if (expectedStateSize != currentStateSize) {
         throw new RuntimeException(

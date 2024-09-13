@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.state.StateBytes;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
@@ -468,7 +467,7 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
     final BlockchainAddress address =
         blockchain.deployContract(creator, contractBytesToken, initRpc);
 
-    final Mpc20LikeState state = deserializeState(blockchain.getContractState(address));
+    final Mpc20LikeState state = deserializeState(address);
 
     assertThat(state.name()).isEqualTo(tokenName);
     assertThat(state.symbol()).isEqualTo(tokenSymbol);
@@ -477,12 +476,12 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
   }
 
   private BigInteger allowance(final BlockchainAddress owner, final BlockchainAddress spender) {
-    final Mpc20LikeState state = deserializeState(blockchain.getContractState(tokenContract));
+    final Mpc20LikeState state = deserializeState(tokenContract);
     return state.allowance(owner, spender);
   }
 
   private BigInteger balance(final BlockchainAddress owner) {
-    final Mpc20LikeState state = deserializeState(blockchain.getContractState(tokenContract));
+    final Mpc20LikeState state = deserializeState(tokenContract);
     final BigInteger balance = state.balances().get(owner);
     return balance == null ? BigInteger.ZERO : balance;
   }
@@ -492,7 +491,7 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
    * contain zero-entries and that the sum of all the saved balances should equal the total supply.
    */
   private void assertStateInvariants() {
-    final Mpc20LikeState state = deserializeState(blockchain.getContractState(tokenContract));
+    final Mpc20LikeState state = deserializeState(tokenContract);
     BigInteger allAssignedBalances = BigInteger.ZERO;
 
     for (final var balance : state.balances().values()) {
@@ -523,5 +522,5 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
     BigInteger allowance(BlockchainAddress owner, BlockchainAddress spender);
   }
 
-  protected abstract Mpc20LikeState deserializeState(StateBytes stateBytes);
+  protected abstract Mpc20LikeState deserializeState(BlockchainAddress address);
 }

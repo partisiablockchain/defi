@@ -39,6 +39,7 @@ public final class SwapFactoryTest extends JunitContractTest {
   private BlockchainAddress token2;
   private BlockchainAddress swapFactory;
   private BlockchainAddress swapAddress;
+  private DexSwapFactory swapFactoryContract;
 
   /** Setup for testing. Requires some token contracts to swap between. */
   @ContractTest
@@ -68,22 +69,21 @@ public final class SwapFactoryTest extends JunitContractTest {
   @ContractTest(previous = "setupTokenContracts")
   void setupFactory() {
     final DexSwapFactory.Permission permissionUpdateSwap =
-        new DexSwapFactory.Permission.Specific(List.of(creator));
+        new DexSwapFactory.PermissionSpecific(List.of(creator));
     final DexSwapFactory.Permission permissionDeploySwap =
-        new DexSwapFactory.Permission.Specific(List.of(creator, liquidityProvider));
+        new DexSwapFactory.PermissionSpecific(List.of(creator, liquidityProvider));
     final DexSwapFactory.Permission permissionDelistSwap =
-        new DexSwapFactory.Permission.Specific(List.of(liquidityProvider));
+        new DexSwapFactory.PermissionSpecific(List.of(liquidityProvider));
     final byte[] initRpc =
         DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, permissionDelistSwap);
     swapFactory = blockchain.deployContract(creator, CONTRACT_BYTES, initRpc);
-
+    swapFactoryContract = new DexSwapFactory(getStateClient(), swapFactory);
     // Assess state
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
     assertThat(state.permissionUpdateSwap()).isEqualTo(permissionUpdateSwap);
     assertThat(state.permissionDeploySwap()).isEqualTo(permissionDeploySwap);
     assertThat(state.permissionDelistSwap()).isEqualTo(permissionDelistSwap);
-    assertThat(state.swapContracts()).isEmpty();
+    assertThat(state.swapContracts().getNextN(null, 100)).isEmpty();
     assertThat(state.swapContractBinary()).isNull();
   }
 
@@ -109,8 +109,7 @@ public final class SwapFactoryTest extends JunitContractTest {
         LiquiditySwapTest.CONTRACT_BYTES.abi());
 
     // Assess state
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
     assertThat(state.swapContractBinary()).isNotNull();
     assertThat(state.swapContractBinary().version()).isEqualTo(1_0_0);
   }
@@ -141,10 +140,9 @@ public final class SwapFactoryTest extends JunitContractTest {
     blockchain.sendAction(liquidityProvider, swapFactory, rpc);
 
     // Check state of dex
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
-    assertThat(state.swapContracts()).hasSize(1);
-    swapAddress = state.swapContracts().keySet().iterator().next();
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
+    assertThat(state.swapContracts().getNextN(null, 100)).hasSize(1);
+    swapAddress = state.swapContracts().getNextN(null, 100).iterator().next().getKey();
     assertThat(swapAddress).isNotNull();
     final var info = state.swapContracts().get(swapAddress);
     assertThat(info).isNotNull();
@@ -242,9 +240,8 @@ public final class SwapFactoryTest extends JunitContractTest {
     final byte[] rpc = DexSwapFactory.delistSwapContract(swapAddress);
     blockchain.sendAction(liquidityProvider, swapFactory, rpc);
 
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
-    assertThat(state.swapContracts()).isEmpty();
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
+    assertThat(state.swapContracts().getNextN(null, 100)).isEmpty();
   }
 
   /** Users without permission_deploy_swap is incapable of delisting contracts. */
@@ -308,9 +305,8 @@ public final class SwapFactoryTest extends JunitContractTest {
     blockchain.sendAction(creator, swapFactory, rpc);
 
     // Check state
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
-    assertThat(state.swapContracts()).hasSize(2);
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
+    assertThat(state.swapContracts().getNextN(null, 100)).hasSize(2);
   }
 
   /** Users are prevented from deployed a swap between identical tokens. */
@@ -323,9 +319,8 @@ public final class SwapFactoryTest extends JunitContractTest {
         .hasMessageContaining("Tokens A and B must not be the same contract");
 
     // Check state
-    final DexSwapFactory.SwapFactoryState state =
-        DexSwapFactory.SwapFactoryState.deserialize(blockchain.getContractState(swapFactory));
-    assertThat(state.swapContracts()).hasSize(1);
+    final DexSwapFactory.SwapFactoryState state = swapFactoryContract.getState();
+    assertThat(state.swapContracts().getNextN(null, 100)).hasSize(1);
 
     assertThat(tokenPair(token1, token2)).isEqualTo(tokenPair(token2, token1));
   }
@@ -362,8 +357,8 @@ public final class SwapFactoryTest extends JunitContractTest {
   void setupFactoryWhereAnybodyCanCallDeploy() {
     // Deploy factory
     final DexSwapFactory.Permission permissionUpdateSwap =
-        new DexSwapFactory.Permission.Specific(List.of(creator));
-    final DexSwapFactory.Permission permissionDeploySwap = new DexSwapFactory.Permission.Anybody();
+        new DexSwapFactory.PermissionSpecific(List.of(creator));
+    final DexSwapFactory.Permission permissionDeploySwap = new DexSwapFactory.PermissionAnybody();
 
     final byte[] initRpc =
         DexSwapFactory.initialize(permissionUpdateSwap, permissionDeploySwap, permissionUpdateSwap);
@@ -418,8 +413,7 @@ public final class SwapFactoryTest extends JunitContractTest {
 
   private BigInteger swapDepositBalance(BlockchainAddress owner, BlockchainAddress tokenAddress) {
     final LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapAddress));
+        new LiquiditySwap(getStateClient(), swapAddress).getState();
     return LiquiditySwapBaseTest.swapDepositBalance(state, owner, tokenAddress);
   }
 
