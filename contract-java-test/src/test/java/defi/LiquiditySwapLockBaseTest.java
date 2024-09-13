@@ -3,6 +3,7 @@ package defi;
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwapLock;
 import com.partisiablockchain.language.abicodegen.Token;
+import com.partisiablockchain.language.codegenlib.AvlTreeMap;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import java.math.BigInteger;
 import java.util.HashSet;
@@ -35,8 +36,7 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
   static final LiquiditySwapTestingUtility swapUtil = new LiquiditySwapTestingUtility();
 
   LiquiditySwapLock.LiquiditySwapContractState getSwapState(BlockchainAddress swapAddress) {
-    return LiquiditySwapLock.LiquiditySwapContractState.deserialize(
-        blockchain.getContractState(swapAddress));
+    return new LiquiditySwapLock(getStateClient(), swapAddress).getState();
   }
 
   LiquiditySwapLock.LiquiditySwapContractState getSwapState() {
@@ -166,11 +166,12 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
 
     BigInteger virtualLiquidityFromLocksA = ZERO;
     BigInteger virtualLiquidityFromLocksB = ZERO;
-    for (LiquiditySwapLock.LiquidityLock lock : swapState.virtualState().locks().values()) {
-      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositToken.TokenA())) {
+    for (var entry : swapState.virtualState().locks().getNextN(null, 1000)) {
+      LiquiditySwapLock.LiquidityLock lock = entry.getValue();
+      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenA())) {
         virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.add(lock.amountIn());
         virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.subtract(lock.amountOut());
-      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositToken.TokenB())) {
+      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenB())) {
         virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.subtract(lock.amountOut());
         virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.add(lock.amountIn());
       } else {
@@ -213,7 +214,10 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     // Get the id of the lock we just acquired, by checking for changes in state.
     Set<LiquiditySwapLock.LiquidityLockId> lockTracker = getCorrespondingLockTracker(lockContract);
     Set<LiquiditySwapLock.LiquidityLockId> newLocks =
-        new HashSet<>(getVirtualSwapState(lockContract).locks().keySet());
+        new HashSet<>(
+            getVirtualSwapState(lockContract).locks().getNextN(null, 1000).stream()
+                .map(Map.Entry::getKey)
+                .toList());
     newLocks.removeAll(lockTracker);
     LiquiditySwapLock.LiquidityLockId lock = newLocks.iterator().next();
     lockTracker.add(lock);
@@ -285,12 +289,12 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
   }
 
   void assertThatLocksContain(
-      Map<LiquiditySwapLock.LiquidityLockId, LiquiditySwapLock.LiquidityLock> locks,
+      AvlTreeMap<LiquiditySwapLock.LiquidityLockId, LiquiditySwapLock.LiquidityLock> locks,
       LiquiditySwapLock.LiquidityLockId lockId,
       LiquiditySwapLock.LiquidityLock lock) {
-    Assertions.assertThat(locks.keySet()).contains(lockId);
 
     LiquiditySwapLock.LiquidityLock actualLock = locks.get(lockId);
+    Assertions.assertThat(actualLock).isNotNull();
     // Test every field except timestamp
     if (actualLock.amountIn().equals(lock.amountIn())
         && actualLock.amountOut().equals(lock.amountOut())
@@ -302,14 +306,14 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     String assertionMsg =
         String.format(
             """
-                                Expecting map:
-                                  %s
-                                to contain lock:
-                                  %s
-                                but the lock had different values:
-                                  %s
-                                """,
-            locks, lock, actualLock);
+            Expecting map:
+              %s
+            to contain lock:
+              %s
+            but the lock had different values:
+              %s
+            """,
+            locks.getNextN(null, 1000), lock, actualLock);
     throw new AssertionError(assertionMsg);
   }
 

@@ -28,6 +28,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
   public BlockchainAddress nft;
   public BlockchainAddress doge;
   public BlockchainAddress auction;
+  private NftAuction auctionContract;
 
   private static final byte BIDDING = 1;
   private static final byte ENDED = 2;
@@ -98,6 +99,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
         NftAuction.initialize(nft, nftId, doge, BigInteger.valueOf(20), BigInteger.valueOf(5), 2);
 
     auction = blockchain.deployContract(auctionOwner, contractBytesAuction, auctionInitRpc);
+    auctionContract = new NftAuction(getStateClient(), auction);
 
     nftState = NftContract.NFTContractState.deserialize(blockchain.getContractState(nft));
 
@@ -129,9 +131,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
 
     assertThat(nftState.contractOwner()).isEqualTo(auctionOwner);
 
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
   }
 
@@ -196,16 +196,13 @@ public abstract class NftAuctionTest extends JunitContractTest {
   /** The highest bid is registered as highest bid. */
   @ContractTest(previous = "setup")
   void makeBid() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] bidForFifty = NftAuction.bid(BigInteger.valueOf(50));
     blockchain.sendAction(bidder1, auction, bidForFifty);
 
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
 
     assertThat(auctionState.highestBidder().bidder()).isEqualTo(bidder1);
     assertThat(auctionState.highestBidder().amount()).isEqualTo(BigInteger.valueOf(50));
@@ -214,9 +211,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
   /** A bid smaller than the auction's reserve price is registered in the Claim map immediately. */
   @ContractTest(previous = "setup")
   void tooSmallBid() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] bidForOne = NftAuction.bid(BigInteger.valueOf(1));
@@ -224,10 +219,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     assertThat(auctionState.reservePrice().intValue() > 1).isTrue();
 
     blockchain.sendAction(bidder1, auction, bidForOne);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     // Assert that the bid can be claimed immediately.
-    assertThat(auctionState.claimMap().size()).isEqualTo(1);
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(1);
     assertThat(auctionState.claimMap().get(bidder1).tokensForBidding()).isEqualTo(1);
   }
 
@@ -257,10 +251,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     byte[] executeRpc = NftAuction.execute();
     blockchain.sendAction(auctionOwner, auction, executeRpc);
 
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(ENDED); // status should be ENDED
-    assertThat(auctionState.claimMap().size())
+    assertThat(auctionState.claimMap().getNextN(null, 100).size())
         .isEqualTo(2); // one claim for bidder and one for seller
     assertThat(auctionState.claimMap().get(bidder3).nftForSale())
         .isEqualTo(nft); // bidder's claim should be equal to the nft for sale
@@ -272,10 +265,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     blockchain.sendAction(bidder3, auction, claimRpc);
     blockchain.sendAction(auctionOwner, auction, claimRpc);
 
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
 
-    assertThat(auctionState.claimMap().size())
+    assertThat(auctionState.claimMap().getNextN(null, 100).size())
         .isEqualTo(2); // size of claim map should remain the same
     assertThat(auctionState.claimMap().get(bidder3).nftForSale())
         .isEqualTo(null); // tokens should now be claimed
@@ -289,9 +281,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void biddersAndWinnersCanClaimBidsAndPrize() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     // make bids
@@ -306,11 +296,10 @@ public abstract class NftAuctionTest extends JunitContractTest {
     // execute auction
     byte[] executeRpc = NftAuction.execute();
     blockchain.sendAction(auctionOwner, auction, executeRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     // status should be ENDED
     assertThat(auctionState.status()).isEqualTo(ENDED);
-    assertThat(auctionState.claimMap().size()).isEqualTo(3);
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(3);
     // bidder who didn't win should be able to claim their bid
     assertThat(auctionState.claimMap().get(bidder1).tokensForBidding())
         .isEqualTo(BigInteger.valueOf(20));
@@ -325,8 +314,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
     blockchain.sendAction(bidder2, auction, claimRpc);
     blockchain.sendAction(auctionOwner, auction, claimRpc);
 
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
 
     // Assert that the claims have been claimed
     assertThat(auctionState.claimMap().get(auctionOwner).tokensForBidding())
@@ -343,9 +331,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void bidsLowerThanHighestBid() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] bidForTwenty = NftAuction.bid(BigInteger.valueOf(20));
@@ -361,10 +347,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     // execute auction
     byte[] executeRpc = NftAuction.execute();
     blockchain.sendAction(auctionOwner, auction, executeRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
 
-    assertThat(auctionState.claimMap().size()).isEqualTo(3);
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(3);
     assertThat(auctionState.claimMap().get(bidder2).tokensForBidding())
         .isEqualTo(BigInteger.valueOf(10));
     assertThat(auctionState.claimMap().get(bidder1).nftForSale()).isEqualTo(nft);
@@ -373,9 +358,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
   /** The first of two bids with the same amount bid is registered as the highest. */
   @ContractTest(previous = "setup")
   void bidTheHighestBid() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] bidder1ForThirty = NftAuction.bid(BigInteger.valueOf(30));
@@ -391,10 +374,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     // execute auction
     byte[] executeRpc = NftAuction.execute();
     blockchain.sendAction(auctionOwner, auction, executeRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
 
-    assertThat(auctionState.claimMap().size()).isEqualTo(3);
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(3);
     // The bidder who was the second to bid the highest bid should lose the auction and be able to
     // claim their bid
     assertThat(auctionState.claimMap().get(bidder2).tokensForBidding())
@@ -409,9 +391,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void bidTwoDifferentBids() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] highBid = NftAuction.bid(BigInteger.valueOf(30));
@@ -427,10 +407,9 @@ public abstract class NftAuctionTest extends JunitContractTest {
     // execute auction
     byte[] executeRpc = NftAuction.execute();
     blockchain.sendAction(auctionOwner, auction, executeRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(ENDED);
-    assertThat(auctionState.claimMap().size()).isEqualTo(2);
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(2);
     // The bidder should be able to claim the lower one of their bids.
     assertThat(auctionState.claimMap().get(bidder1).tokensForBidding())
         .isEqualTo(BigInteger.valueOf(20));
@@ -484,9 +463,8 @@ public abstract class NftAuctionTest extends JunitContractTest {
     BlockchainAddress account = blockchain.newAccount(30);
     byte[] claimRpc = NftAuction.claim();
     blockchain.sendAction(account, auction, claimRpc);
-    var auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
-    assertThat(auctionState.claimMap().size()).isEqualTo(0);
+    var auctionState = auctionContract.getState();
+    assertThat(auctionState.claimMap().getNextN(null, 100).size()).isEqualTo(0);
   }
 
   /** The auction owner cannot claim a payment before the auction is executed. */
@@ -498,14 +476,12 @@ public abstract class NftAuctionTest extends JunitContractTest {
 
     blockchain.sendAction(bidder2, auction, bidTwentyRpc);
     blockchain.sendAction(bidder3, auction, bidThirtyRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.claimMap().get(auctionOwner).nftForSale()).isEqualTo(null);
 
     byte[] claimRpc = NftAuction.claim();
     blockchain.sendAction(auctionOwner, auction, claimRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.claimMap().get(auctionOwner).nftForSale()).isEqualTo(null);
     assertThat(auctionState.highestBidder().bidder()).isEqualTo(bidder3);
   }
@@ -522,8 +498,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
 
     blockchain.sendAction(
         auctionOwner, auction, executeRpc); // execute first to change status from Bidding
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(ENDED);
     assertThatThrownBy(() -> blockchain.sendAction(auctionOwner, auction, executeRpc))
         .isInstanceOf(ActionFailureException.class)
@@ -553,14 +528,12 @@ public abstract class NftAuctionTest extends JunitContractTest {
 
     blockchain.sendAction(bidder2, auction, bidTwentyRpc);
     blockchain.sendAction(bidder3, auction, bidThirtyRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.claimMap().get(bidder3)).isNull();
 
     byte[] claimRpc = NftAuction.claim();
     blockchain.sendAction(bidder3, auction, claimRpc);
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    auctionState = auctionContract.getState();
     assertThat(auctionState.claimMap().get(bidder3)).isNull();
     assertThat(auctionState.highestBidder().bidder()).isEqualTo(bidder3);
   }
@@ -608,9 +581,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
   /** The start of an auction is not allowed unless it is in the CREATION phase. */
   @ContractTest(previous = "setup")
   void startCalledNotCreationStatus() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     byte creation = 0;
     assertThat(auctionState.status()).isNotEqualTo(creation);
     byte[] startRpc = NftAuction.start();
@@ -624,9 +595,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void bidTokenNotApproved() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
     byte[] transferThousand = Token.transfer(bidder2, BigInteger.valueOf(1000));
     BlockchainAddress bidderNotApproved = blockchain.newAccount(17);
@@ -645,9 +614,7 @@ public abstract class NftAuctionTest extends JunitContractTest {
    */
   @ContractTest(previous = "setup")
   void bidTokenNotEnoughFunds() {
-    NftAuction.NftAuctionContractState auctionState;
-    auctionState =
-        NftAuction.NftAuctionContractState.deserialize(blockchain.getContractState(auction));
+    NftAuction.NftAuctionContractState auctionState = auctionContract.getState();
     assertThat(auctionState.status()).isEqualTo(BIDDING);
 
     byte[] bidForTenThousand = NftAuction.bid(BigInteger.valueOf(10_000));

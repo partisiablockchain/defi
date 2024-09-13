@@ -138,7 +138,7 @@ public abstract class RoutingTest extends JunitContractTest {
 
     // Deploy the router
     byte[] initRpcRouter =
-        SwapRouter.initialize(new SwapRouter.Permission.Anybody(), swapContractInfoList);
+        SwapRouter.initialize(new SwapRouter.PermissionAnybody(), swapContractInfoList);
     routerContract =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwapRouter, initRpcRouter);
 
@@ -148,7 +148,7 @@ public abstract class RoutingTest extends JunitContractTest {
     Assertions.assertThat(state.swapContracts()).isEqualTo(swapContractInfoList);
     Assertions.assertThat(state.routeTracker()).isNotNull();
     Assertions.assertThat(state.routeTracker().nextRouteId()).isZero();
-    Assertions.assertThat(state.routeTracker().activeRoutes()).isEmpty();
+    Assertions.assertThat(state.routeTracker().activeRoutes().getNextN(null, 100)).isEmpty();
   }
 
   /**
@@ -583,7 +583,8 @@ public abstract class RoutingTest extends JunitContractTest {
 
     // Acquire first lock at AC.
     TxExecution s6 = executeEventAsync(s5.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandC).virtualState().locks().getNextN(null, 100))
         .hasSize(1);
 
     // Callback to acquire next lock.
@@ -592,7 +593,8 @@ public abstract class RoutingTest extends JunitContractTest {
 
     // Acquire second lock at CD.
     TxExecution s9 = executeEventAsync(s8.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressCandD).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressCandD).virtualState().locks().getNextN(null, 100))
         .hasSize(1);
 
     // Execute callbacks to acquire next lock.
@@ -611,18 +613,25 @@ public abstract class RoutingTest extends JunitContractTest {
     TxExecution s17 = executeEventAsync(s16.getSystemCallback());
     TxExecution s18 = executeEventAsync(s17.getContractCallback());
 
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).tokenBalances().balances())
-        .containsEntry(
-            routerContract,
-            new LiquiditySwapLock.TokenBalance(NON_OWNER_TOKEN_AMOUNT_A, ZERO, ZERO));
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandC)
+                .tokenBalances()
+                .balances()
+                .get(routerContract))
+        .isEqualTo(new LiquiditySwapLock.TokenBalance(NON_OWNER_TOKEN_AMOUNT_A, ZERO, ZERO));
     TxExecution s19 = executeEventAsync(s18.getSystemCallback());
     TxExecution s20 = executeEventAsync(s19.getContractCallback());
     // Execute
     TxExecution s21 = executeEventAsync(s20.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandC).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandC).tokenBalances().balances())
-        .containsEntry(routerContract, new LiquiditySwapLock.TokenBalance(ZERO, receivingC, ZERO));
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandC)
+                .tokenBalances()
+                .balances()
+                .get(routerContract))
+        .isEqualTo(new LiquiditySwapLock.TokenBalance(ZERO, receivingC, ZERO));
 
     // Handle callback to withdrawal
     TxExecution s22 = executeEventAsync(s21.getSystemCallback());
@@ -652,16 +661,25 @@ public abstract class RoutingTest extends JunitContractTest {
     TxExecution s35 = executeEventAsync(s34.getSystemCallback());
     TxExecution s36 = executeEventAsync(s35.getContractCallback());
 
-    Assertions.assertThat(getSwapState(swapLockContractAddressCandD).tokenBalances().balances())
-        .containsEntry(routerContract, new LiquiditySwapLock.TokenBalance(receivingC, ZERO, ZERO));
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressCandD)
+                .tokenBalances()
+                .balances()
+                .get(routerContract))
+        .isEqualTo(new LiquiditySwapLock.TokenBalance(receivingC, ZERO, ZERO));
     TxExecution s37 = executeEventAsync(s36.getSystemCallback());
     TxExecution s38 = executeEventAsync(s37.getContractCallback());
     // Execute
     TxExecution s39 = executeEventAsync(s38.getContractInteraction());
-    Assertions.assertThat(getSwapState(swapLockContractAddressCandD).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressCandD).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
-    Assertions.assertThat(getSwapState(swapLockContractAddressCandD).tokenBalances().balances())
-        .containsEntry(routerContract, new LiquiditySwapLock.TokenBalance(ZERO, receivingD, ZERO));
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressCandD)
+                .tokenBalances()
+                .balances()
+                .get(routerContract))
+        .isEqualTo(new LiquiditySwapLock.TokenBalance(ZERO, receivingD, ZERO));
 
     // Handle callback to withdrawal
     TxExecution s40 = executeEventAsync(s39.getSystemCallback());
@@ -699,7 +717,7 @@ public abstract class RoutingTest extends JunitContractTest {
     // Deploy new swap between C and Z.
     byte[] initRpcSwapCandZ =
         LiquiditySwapLock.initialize(
-            contractTokenC, contractTokenZ, (short) 0, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenC, contractTokenZ, (short) 0, new LiquiditySwapLock.PermissionAnybody());
     BlockchainAddress swapLockContractAddressCandZ =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapCandZ);
 
@@ -900,9 +918,11 @@ public abstract class RoutingTest extends JunitContractTest {
             "Could not acquire all locks in route.");
 
     // Check for no locks, and no tokens taken from the user
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandB).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandB).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
-    Assertions.assertThat(getSwapState(swapLockContractAddressBandD).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressBandD).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
     Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
         .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
@@ -942,9 +962,11 @@ public abstract class RoutingTest extends JunitContractTest {
             "Could not acquire all locks in route.");
 
     // Check for no locks, and no tokens taken from the user
-    Assertions.assertThat(getSwapState(swapLockContractAddressAandB).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressAandB).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
-    Assertions.assertThat(getSwapState(swapLockContractAddressBandD).virtualState().locks())
+    Assertions.assertThat(
+            getSwapState(swapLockContractAddressBandD).virtualState().locks().getNextN(null, 100))
         .hasSize(0);
     Assertions.assertThat(getTokenBalance(contractTokenA, nonOwnerAddress1))
         .isEqualTo(NON_OWNER_TOKEN_AMOUNT_A);
@@ -1088,7 +1110,8 @@ public abstract class RoutingTest extends JunitContractTest {
 
     // No locks exist at the swap contracts.
     for (BlockchainAddress swapOnRoute : randomRoute.swapRoute) {
-      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks()).isEmpty();
+      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks().getNextN(null, 100))
+          .isEmpty();
     }
 
     // Tokens haven't moved.
@@ -1148,7 +1171,8 @@ public abstract class RoutingTest extends JunitContractTest {
 
     // No locks exist at the swap contracts.
     for (BlockchainAddress swapOnRoute : randomRoute.swapRoute) {
-      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks()).isEmpty();
+      Assertions.assertThat(getSwapState(swapOnRoute).virtualState().locks().getNextN(null, 100))
+          .isEmpty();
     }
 
     // Tokens haven't moved.
@@ -1289,43 +1313,43 @@ public abstract class RoutingTest extends JunitContractTest {
   private List<SwapRouter.SwapContractInfo> deploySwapContracts() {
     byte[] initRpcSwapAandB =
         LiquiditySwapLock.initialize(
-            contractTokenA, contractTokenB, FEE_AB, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenA, contractTokenB, FEE_AB, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressAandB =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapAandB);
 
     byte[] initRpcSwapAandC =
         LiquiditySwapLock.initialize(
-            contractTokenA, contractTokenC, FEE_AC, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenA, contractTokenC, FEE_AC, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressAandC =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapAandC);
 
     byte[] initRpcSwapBandD =
         LiquiditySwapLock.initialize(
-            contractTokenB, contractTokenD, FEE_BD, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenB, contractTokenD, FEE_BD, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressBandD =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapBandD);
 
     byte[] initRpcSwapCandD =
         LiquiditySwapLock.initialize(
-            contractTokenC, contractTokenD, FEE_CD, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenC, contractTokenD, FEE_CD, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressCandD =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapCandD);
 
     byte[] initRpcSwapDandE =
         LiquiditySwapLock.initialize(
-            contractTokenD, contractTokenE, FEE_CD, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenD, contractTokenE, FEE_CD, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractUnknown =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapDandE);
 
     byte[] initRpcSwapAandF =
         LiquiditySwapLock.initialize(
-            contractTokenA, contractTokenF, FEE_AF, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenA, contractTokenF, FEE_AF, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressAandF =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapAandF);
 
     byte[] initRpcSwapDandF =
         LiquiditySwapLock.initialize(
-            contractTokenD, contractTokenF, FEE_DF, new LiquiditySwapLock.Permission.Anybody());
+            contractTokenD, contractTokenF, FEE_DF, new LiquiditySwapLock.PermissionAnybody());
     swapLockContractAddressDandF =
         blockchain.deployContract(contractOwnerAddress, contractBytesSwap, initRpcSwapDandF);
 
@@ -1355,13 +1379,12 @@ public abstract class RoutingTest extends JunitContractTest {
   }
 
   private SwapRouter.RouterState getRouterState() {
-    return SwapRouter.RouterState.deserialize(blockchain.getContractState(routerContract));
+    return new SwapRouter(getStateClient(), routerContract).getState();
   }
 
   private LiquiditySwapLock.LiquiditySwapContractState getSwapState(
       BlockchainAddress swapContract) {
-    return LiquiditySwapLock.LiquiditySwapContractState.deserialize(
-        blockchain.getContractState(swapContract));
+    return new LiquiditySwapLock(getStateClient(), swapContract).getState();
   }
 
   protected abstract BigInteger getTokenBalance(

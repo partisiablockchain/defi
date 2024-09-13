@@ -51,9 +51,9 @@ public final class RouterTest extends JunitContractTest {
 
     @Override
     public BigInteger getTokenBalance(BlockchainAddress tokenContract, BlockchainAddress key) {
-      final TokenV2.TokenState state =
-          TokenV2.TokenState.deserialize(blockchain.getContractState(tokenContract));
-      return state.balances().getOrDefault(key, BigInteger.ZERO);
+      final TokenV2.TokenState state = new TokenV2(getStateClient(), tokenContract).getState();
+      BigInteger val = state.balances().get(key);
+      return val != null ? val : BigInteger.ZERO;
     }
   }
 }

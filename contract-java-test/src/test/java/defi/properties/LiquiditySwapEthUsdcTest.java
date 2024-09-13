@@ -139,8 +139,7 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
 
     // Validate no liquidity.
     LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     LiquiditySwap.TokenBalance stateBalance =
         state.tokenBalances().balances().get(state.liquidityPoolAddress());
 
@@ -151,8 +150,7 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
   @ContractTest(previous = "contractInit")
   void provideTooLittleLiquidity() {
     LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     LiquiditySwap.TokenBalance stateBalance =
         state.tokenBalances().balances().get(state.liquidityPoolAddress());
 
@@ -169,9 +167,7 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
         .hasMessageContaining("The given input amount yielded 0 minted liquidity");
 
     // Validate no liquidity.
-    state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+    state = new LiquiditySwap(getStateClient(), swapContractAddress).getState();
     stateBalance = state.tokenBalances().balances().get(state.liquidityPoolAddress());
 
     Assertions.assertThat(stateBalance.aTokens()).isEqualTo(aBefore);
@@ -241,8 +237,7 @@ public abstract class LiquiditySwapEthUsdcTest extends LiquiditySwapBaseTest {
     final BigInteger usdcAmount =
         BigInteger.ONE.multiply(INITIAL_RATE_ETH_USDC).multiply(BASE_UNIT_USDC);
     LiquiditySwap.LiquiditySwapContractState state =
-        LiquiditySwap.LiquiditySwapContractState.deserialize(
-            blockchain.getContractState(swapContractAddress));
+        new LiquiditySwap(getStateClient(), swapContractAddress).getState();
 
     // Contract owner reclaims all liquidity
     blockchain.sendAction(

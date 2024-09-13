@@ -1,7 +1,6 @@
 package defi;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.state.StateBytes;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.junit.ContractBytes;
 import defi.properties.Mpc20LikeTest;
@@ -27,8 +26,8 @@ public final class TokenContractTest {
     }
 
     @Override
-    protected Mpc20LikeState deserializeState(StateBytes stateBytes) {
-      final Token.TokenState state = Token.TokenState.deserialize(stateBytes);
+    protected Mpc20LikeState deserializeState(BlockchainAddress address) {
+      final Token.TokenState state = new Token(getStateClient(), address).getState();
       return new Mpc20State(state);
     }
 

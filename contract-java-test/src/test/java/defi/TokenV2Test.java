@@ -1,13 +1,13 @@
 package defi;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.state.StateBytes;
 import com.partisiablockchain.language.abicodegen.TokenV2;
 import com.partisiablockchain.language.junit.ContractBytes;
 import defi.properties.Mpc20LikeTest;
 import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
 
 /** Test the Token-v2 contract. */
@@ -28,8 +28,8 @@ public final class TokenV2Test {
     }
 
     @Override
-    protected Mpc20LikeState deserializeState(StateBytes stateBytes) {
-      final TokenV2.TokenState state = TokenV2.TokenState.deserialize(stateBytes);
+    protected Mpc20LikeState deserializeState(BlockchainAddress address) {
+      final TokenV2.TokenState state = new TokenV2(getStateClient(), address).getState();
       return new Mpc20V2State(state);
     }
 
@@ -67,7 +67,8 @@ public final class TokenV2Test {
 
       @Override
       public Map<BlockchainAddress, BigInteger> balances() {
-        return state.balances();
+        return state.balances().getNextN(null, 1000).stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
       }
 
       @Override
