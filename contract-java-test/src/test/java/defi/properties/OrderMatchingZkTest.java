@@ -14,6 +14,7 @@ import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.IntStream;
 
 /**
@@ -50,10 +51,16 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
   private final ContractBytes contractBytesOrderMatch;
   private final FileAbi contractAbiOrderMatch;
 
+  /**
+   * Constructor for {@link OrderMatchingZkTest}.
+   *
+   * @param contractBytesToken Contract definition for token. Not nullable.
+   * @param contractBytesOrderMatch Contract definition for order matching contract. Not nullable.
+   */
   protected OrderMatchingZkTest(
       final ContractBytes contractBytesToken, final ContractBytes contractBytesOrderMatch) {
-    this.contractBytesToken = contractBytesToken;
-    this.contractBytesOrderMatch = contractBytesOrderMatch;
+    this.contractBytesToken = Objects.requireNonNull(contractBytesToken);
+    this.contractBytesOrderMatch = Objects.requireNonNull(contractBytesOrderMatch);
     this.contractAbiOrderMatch = new AbiParser(contractBytesOrderMatch.abi()).parseAbi();
   }
 

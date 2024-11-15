@@ -1387,8 +1387,14 @@ public abstract class RoutingTest extends JunitContractTest {
     return new LiquiditySwapLock(getStateClient(), swapContract).getState();
   }
 
+  /**
+   * Gets the token balance of the given account in the given token.
+   *
+   * @param tokenContract Contract to get balance from. Not nullable.
+   * @param account Account to get balance for. Not nullable.
+   */
   protected abstract BigInteger getTokenBalance(
-      BlockchainAddress tokenContract, BlockchainAddress key);
+      BlockchainAddress tokenContract, BlockchainAddress account);
 
   private BigInteger calculateReceivingAmount(
       BlockchainAddress swapContract, BlockchainAddress fromToken, BigInteger amount, short fee) {

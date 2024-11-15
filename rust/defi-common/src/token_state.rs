@@ -13,7 +13,8 @@ use std::ops::Add;
 
 use pbc_contract_common::address::Address;
 
-type TokenAmount = u128;
+/// Type for tracking token amounts.
+pub type TokenAmount = u128;
 
 /// Extension trait that defines an abstract contract state for easy implementation of [MPC-20
 /// token
@@ -27,9 +28,9 @@ type TokenAmount = u128;
 /// methods:
 ///
 /// - [`get_symbol`](`AbstractTokenState::get_symbol`): For error messages.
-/// - [`balance_of`](`AbstractTokenState:balance_of:`): Get the balance of the specified user.
+/// - [`balance_of`](`AbstractTokenState::balance_of`): Get the balance of the specified user.
 /// - [`update_balance`](`AbstractTokenState::update_balance`): Replaces the balance of the specified user. Should rarely be called
-/// directly.
+///   directly.
 /// - [`allowance`](`AbstractTokenState::allowance`): Gets the allowance for the specified users.
 /// - [`update_allowance`](`AbstractTokenState::update_allowance`): Replaces the allowance of the specified users.
 pub trait AbstractTokenState {
@@ -61,7 +62,7 @@ pub trait AbstractTokenState {
     /// invocations, as it allows for minting or burning tokens. A single call in the contract
     /// `#[init]` might be appropriate for minting initial balances.
     ///
-    /// Contracts should prefer [`transfer`], as it guarantees that the token amount will remain
+    /// Contracts should prefer [`AbstractTokenState::transfer`], as it guarantees that the token amount will remain
     /// constant.
     fn update_balance(&mut self, owner: Address, amount: TokenAmount);
 
@@ -112,7 +113,7 @@ pub trait AbstractTokenState {
 
     /// Transfers `amount` of tokens to address `to` from the caller.
     ///
-    /// The [`transfer`] fails if the message caller's account balance does not have enough tokens to spend.
+    /// The [`AbstractTokenState::transfer`] fails if the message caller's account balance does not have enough tokens to spend.
     ///
     /// If the sender's account goes to 0, the sender's address is removed from state.
     ///
@@ -143,9 +144,9 @@ pub trait AbstractTokenState {
     /// Transfers `amount` of tokens from address `from` to address `to`.
     ///
     /// This requires that the sender is allowed to do the transfer by the `from`
-    /// account through [`update_allowance`].
+    /// account through [`AbstractTokenState::update_allowance`].
     ///
-    /// The [`transfer_from`] fails if the message caller's account
+    /// The [`AbstractTokenState::transfer_from`] fails if the message caller's account
     /// balance does not have enough tokens to spend, or if the tokens were not approved.
     ///
     /// ### Parameters:

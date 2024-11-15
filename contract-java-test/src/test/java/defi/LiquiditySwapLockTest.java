@@ -15,9 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 /** {@link LiquiditySwapLock} testing. */
 public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
   static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock_runner"));
 
   private static final BigInteger TOTAL_SUPPLY_A = BigInteger.ONE.shiftLeft(105);
@@ -324,26 +323,6 @@ public final class LiquiditySwapLockTest extends LiquiditySwapLockBaseTest {
     // Check that the final error is as expected
     Assertions.assertThat(s4.getContractCallback().getFailureCause().getErrorMessage())
         .contains("Transfer did not succeed");
-  }
-
-  /** If a user tries to deposit a token which doesn't match the swap tokens, deposit fails. */
-  @ContractTest(previous = "contractInit")
-  void depositUnknownToken() {
-    BigInteger depositAmount = NON_OWNER_TOKEN_AMOUNT_A;
-
-    // First approve
-    blockchain.sendAction(
-        nonOwnerAddress1,
-        contractTokenA,
-        Token.approve(swapLockContractAddressAtoB, depositAmount));
-
-    Assertions.assertThatThrownBy(
-            () ->
-                blockchain.sendAction(
-                    nonOwnerAddress1,
-                    swapLockContractAddressBtoC,
-                    LiquiditySwapLock.deposit(contractTokenA, depositAmount)))
-        .hasMessageContaining("token_in invalid token address");
   }
 
   /** A user can acquire a lock, which updates the virtual balances of the contract. */

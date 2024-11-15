@@ -14,9 +14,8 @@ public final class TokenContractTest {
 
   /** {@link ContractBytes} for the {@link Token} contract. */
   public static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/token.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/token_runner"));
 
   @Nested
@@ -26,7 +25,7 @@ public final class TokenContractTest {
     }
 
     @Override
-    protected Mpc20LikeState deserializeState(BlockchainAddress address) {
+    protected Mpc20LikeState getContractState(BlockchainAddress address) {
       final Token.TokenState state = new Token(getStateClient(), address).getState();
       return new Mpc20State(state);
     }

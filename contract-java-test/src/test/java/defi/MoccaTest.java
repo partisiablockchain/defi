@@ -19,15 +19,12 @@ import java.util.List;
 public final class MoccaTest extends JunitContractTest {
 
   private static final ContractBytes MOCCA_CONTRACT =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/mocca.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/mocca.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/mocca.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/mocca_runner"));
 
   private static final ContractBytes TOKEN_CONTRACT =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.abi"));
+      ContractBytes.fromPbcFile(Path.of("../rust/target/wasm32-unknown-unknown/release/token.pbc"));
 
   private static final BigInteger TOTAL_SUPPLY =
       BigInteger.valueOf(1200).multiply(BigInteger.TEN.pow(18));

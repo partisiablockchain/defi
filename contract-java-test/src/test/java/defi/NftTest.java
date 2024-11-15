@@ -14,9 +14,8 @@ import org.junit.jupiter.api.Nested;
 /** NFT contract test. */
 public final class NftTest {
   static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_contract.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_contract.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_contract.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/nft_contract_runner"));
 
   @Nested
@@ -26,7 +25,7 @@ public final class NftTest {
     }
 
     @Override
-    protected Mpc721LikeState getState() {
+    protected Mpc721LikeState getContractState() {
       return new Mpc721State(
           NftContract.NFTContractState.deserialize(blockchain.getContractState(contractAddress)));
     }

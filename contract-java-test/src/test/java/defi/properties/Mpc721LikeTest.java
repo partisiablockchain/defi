@@ -26,15 +26,16 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   private static final BigInteger token3 = BigInteger.valueOf(3);
   private static final BigInteger token4 = BigInteger.valueOf(4);
 
-  protected final ContractBytes contractBytesToken;
+  /** Definition of the NFT-like contract under test. */
+  protected final ContractBytes contractBytesNft;
 
   /**
    * Initialize the test class.
    *
-   * @param contractBytesToken Contract bytes to initialize the {@link NftContract}.
+   * @param contractBytesNft Contract bytes to initialize the {@link NftContract}.
    */
-  public Mpc721LikeTest(final ContractBytes contractBytesToken) {
-    this.contractBytesToken = contractBytesToken;
+  public Mpc721LikeTest(final ContractBytes contractBytesNft) {
+    this.contractBytesNft = contractBytesNft;
   }
 
   /** Test of initializer. */
@@ -46,10 +47,9 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
     token3Owner = blockchain.newAccount(4);
 
     byte[] initRpc = NftContract.initialize("SomeNFT", "SNFT", "www.snft/");
-    contractAddress =
-        blockchain.deployContract(nftContractOwnerAccount, contractBytesToken, initRpc);
+    contractAddress = blockchain.deployContract(nftContractOwnerAccount, contractBytesNft, initRpc);
 
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
 
     assertThat(state.name()).isEqualTo("SomeNFT");
     assertThat(state.symbol()).isEqualTo("SNFT");
@@ -72,7 +72,7 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
     blockchain.sendAction(nftContractOwnerAccount, contractAddress, mint3);
 
     // Assert that the owners are correct
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.owners()).hasSize(3);
     assertThat(state.owners().get(token1)).isEqualTo(token1Owner);
     assertThat(state.owners().get(token2)).isEqualTo(token2Owner);
@@ -88,7 +88,7 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "init")
   void nonContractOwnerCannotMintNonMintedToken() {
     // Check that the account is not the Nft contract owner
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.contractOwner()).isNotEqualTo(token2Owner);
     // An account which is not the Nft contract owner tries to mint a non-minted token
     assertThatThrownBy(
@@ -102,7 +102,7 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "mint")
   void nonContractOwnerCannotMintMintedToken() {
     // Check that the account is not the Nft contract owner
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.contractOwner()).isNotEqualTo(token2Owner);
     // An account who is not the Nft contract owner tries to mint a minted token
     assertThatThrownBy(
@@ -116,7 +116,7 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "mint")
   void cannotMintSameTokenTwice() {
     // Check that the token has been minted
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.owners().get(token1)).isNotNull();
 
     // Try to mint the token again
@@ -128,12 +128,12 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   /** Owner of a token can transfer its token to another account. */
   @ContractTest(previous = "mint")
   void ownerCanTransferFrom() {
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.owners().get(token3)).isEqualTo(token3Owner);
 
     blockchain.sendAction(
         token3Owner, contractAddress, NftContract.transferFrom(token3Owner, token2Owner, token3));
-    assertThat(getState().owners().get(token3)).isEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token3)).isEqualTo(token2Owner);
   }
 
   /** An account cannot transfer a non-existing token. */
@@ -151,7 +151,7 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   /** A token owner cannot transfer its token from another account. */
   @ContractTest(previous = "mint")
   void tokenOwnerCannotTransferFromAnotherAccount() {
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.owners().get(token1)).isEqualTo(token1Owner);
 
     assertThatThrownBy(
@@ -166,11 +166,11 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   /** The owner of a token can burn the token. */
   @ContractTest(previous = "mint")
   void burn() {
-    assertThat(getState().owners().get(token2)).isEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token2)).isEqualTo(token2Owner);
 
     blockchain.sendAction(token2Owner, contractAddress, NftContract.burn(token2));
-    assertThat(getState().owners().get(token2)).isNull();
-    assertThat(getState().tokenUriDetails(token2)).isNull();
+    assertThat(getContractState().owners().get(token2)).isNull();
+    assertThat(getContractState().tokenUriDetails(token2)).isNull();
   }
 
   /** A token which does not exist cannot be burnt. */
@@ -186,32 +186,32 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   /** The owner of a token can approve another account for the token. */
   @ContractTest(previous = "mint")
   void ownerCanApprove() {
-    assertThat(getState().owners().get(token2)).isEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token2)).isEqualTo(token2Owner);
 
     blockchain.sendAction(token2Owner, contractAddress, NftContract.approve(token3Owner, token2));
-    assertThat(getState().tokenApprovals()).hasSize(1);
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals()).hasSize(1);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
   }
 
   /** The token owner can change which account is approved for the token. */
   @ContractTest(previous = "mint")
   void canChangeApproval() {
-    assertThat(getState().owners().get(token2)).isEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token2)).isEqualTo(token2Owner);
     // Token owner approves one account for a token, and then changes the approval to another
     // account
     blockchain.sendAction(token2Owner, contractAddress, NftContract.approve(token3Owner, token2));
     blockchain.sendAction(token2Owner, contractAddress, NftContract.approve(token1Owner, token2));
-    assertThat(getState().tokenApprovals()).hasSize(1);
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token1Owner);
+    assertThat(getContractState().tokenApprovals()).hasSize(1);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token1Owner);
   }
 
   /** The token owner can remove an approval. */
   @ContractTest(previous = "ownerCanApprove")
   void canRemoveApproval() {
     // From the previous test, token3Owner is approved for token2
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
     blockchain.sendAction(token2Owner, contractAddress, NftContract.approve(null, token2));
-    assertThat(getState().tokenApprovals()).isEmpty();
+    assertThat(getContractState().tokenApprovals()).isEmpty();
   }
 
   /** A non-existing token cannot be approved. */
@@ -229,9 +229,9 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   /** A caller who is neither owner nor operator of the token cannot approve the token. */
   @ContractTest(previous = "mint")
   void cannotApproveIfUnauthorized() {
-    Mpc721LikeState state = getState();
+    Mpc721LikeState state = getContractState();
     assertThat(state.owners().get(token1)).isNotEqualTo(token3Owner);
-    assertThat(getState().tokenApprovals().get(token1)).isNotEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals().get(token1)).isNotEqualTo(token3Owner);
 
     assertThatThrownBy(
             () ->
@@ -244,32 +244,32 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "ownerCanApprove")
   void approvedAccountTransfer() {
     // From the previous test, token3Owner is approved for token2
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
     blockchain.sendAction(
         token3Owner, contractAddress, NftContract.transferFrom(token2Owner, token1Owner, token2));
-    assertThat(getState().owners().get(token2)).isEqualTo(token1Owner);
+    assertThat(getContractState().owners().get(token2)).isEqualTo(token1Owner);
     // assert that approval of token is cleared
-    assertThat(getState().tokenApprovals().get(token2)).isNull();
+    assertThat(getContractState().tokenApprovals().get(token2)).isNull();
   }
 
   /** A token can be approved for the same account more than once. */
   @ContractTest(previous = "ownerCanApprove")
   void tokenCanBeApprovedAgain() {
     // Check that a token is approved from previous test
-    assertThat(getState().tokenApprovals()).hasSize(1);
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals()).hasSize(1);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
     // Approve the token again
     blockchain.sendAction(token2Owner, contractAddress, NftContract.approve(token3Owner, token2));
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
   }
 
   /** An account which has been approved for a token (i.e. operator) can burn the token. */
   @ContractTest(previous = "ownerCanApprove")
   void approvedAccountCanBurnToken() {
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token3Owner);
 
     blockchain.sendAction(token3Owner, contractAddress, NftContract.burn(token2));
-    assertThat(getState().owners().get(token2)).isNull();
+    assertThat(getContractState().owners().get(token2)).isNull();
   }
 
   /** An account can approve another account for all of its assets. */
@@ -277,42 +277,42 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   void setApprovalForAll() {
     byte[] setApproval = NftContract.setApprovalForAll(token3Owner, true);
     blockchain.sendAction(token2Owner, contractAddress, setApproval);
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
   }
 
   /** An account can set approval_for_all for more than one account. */
   @ContractTest(previous = "setApprovalForAll")
   void canSetAnotherApprovalForSameAccount() {
     // check the existing approval_for_all
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
 
     blockchain.sendAction(
         token2Owner, contractAddress, NftContract.setApprovalForAll(token1Owner, true));
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
-    assertThat(getState().isApprovedForAll(token2Owner, token1Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token1Owner)).isTrue();
   }
 
   /** An account can remove approval_for_all. */
   @ContractTest(previous = "setApprovalForAll")
   void canRemoveAnApproval() {
     // check the existing approval_for_all
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
 
     blockchain.sendAction(
         token2Owner, contractAddress, NftContract.setApprovalForAll(token3Owner, false));
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isFalse();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isFalse();
   }
 
   /** An already set approval can be set again. */
   @ContractTest(previous = "setApprovalForAll")
   void canSetAnAlreadyExistingApproval() {
     // check the existing approval_for_all
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
 
     // set already existing approval_for_all again
     byte[] setApproval = NftContract.setApprovalForAll(token3Owner, true);
     blockchain.sendAction(token2Owner, contractAddress, setApproval);
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
   }
 
   /** An account cannot set approval_for_all to itself. */
@@ -330,38 +330,38 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "setApprovalForAll")
   void operatorCanApproveOwnersToken() {
     // check that account is operator
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
     // operator can approve owner's token
     blockchain.sendAction(token3Owner, contractAddress, NftContract.approve(token1Owner, token2));
-    assertThat(getState().tokenApprovals().get(token2)).isEqualTo(token1Owner);
+    assertThat(getContractState().tokenApprovals().get(token2)).isEqualTo(token1Owner);
   }
 
   /** An operator with approval for all assets can burn a token. */
   @ContractTest(previous = "setApprovalForAll")
   void operatorCanBurnOwnersToken() {
     // check that account is operator
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
     blockchain.sendAction(token3Owner, contractAddress, NftContract.burn(token2));
-    assertThat(getState().owners().get(token2)).isNull();
+    assertThat(getContractState().owners().get(token2)).isNull();
   }
 
   /** An operator with approval for all assets can transfer a token. */
   @ContractTest(previous = "setApprovalForAll")
   void operatorCanTransferOwnersToken() {
     // check that account is operator
-    assertThat(getState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
+    assertThat(getContractState().isApprovedForAll(token2Owner, token3Owner)).isTrue();
     // operator can transfer owner's token
     blockchain.sendAction(
         token3Owner, contractAddress, NftContract.transferFrom(token2Owner, token1Owner, token2));
-    assertThat(getState().owners().get(token2)).isEqualTo(token1Owner);
+    assertThat(getContractState().owners().get(token2)).isEqualTo(token1Owner);
   }
 
   /** Accounts who do not own a token and are not approved cannot transfer the token. */
   @ContractTest(previous = "mint")
   void onlyOwnerOrOperatorCanTransferFrom() {
     // Check that account is neither operator nor owner of the token
-    assertThat(getState().owners().get(token1)).isNotEqualTo(token2Owner);
-    assertThat(getState().tokenApprovals().get(token1)).isNotEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token1)).isNotEqualTo(token2Owner);
+    assertThat(getContractState().tokenApprovals().get(token1)).isNotEqualTo(token2Owner);
 
     assertThatThrownBy(
             () ->
@@ -376,8 +376,8 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
   @ContractTest(previous = "mint")
   void onlyOwnerOrOperatorCanBurn() {
     // Check that account is neither operator nor owner of the token
-    assertThat(getState().owners().get(token1)).isNotEqualTo(token2Owner);
-    assertThat(getState().tokenApprovals().get(token1)).isNotEqualTo(token2Owner);
+    assertThat(getContractState().owners().get(token1)).isNotEqualTo(token2Owner);
+    assertThat(getContractState().tokenApprovals().get(token1)).isNotEqualTo(token2Owner);
 
     assertThatThrownBy(
             () -> blockchain.sendAction(token2Owner, contractAddress, NftContract.burn(token1)))
@@ -403,7 +403,19 @@ public abstract class Mpc721LikeTest extends JunitContractTest {
     BlockchainAddress contractOwner();
   }
 
-  protected abstract Mpc721LikeState getState();
+  /**
+   * Get state of contract under test.
+   *
+   * @return NFT-like contract state.
+   */
+  protected abstract Mpc721LikeState getContractState();
 
-  protected abstract byte[] mintAction(BlockchainAddress to, BigInteger tokenId, String uri);
+  /**
+   * Generate action RPC for minting the an NFT to the given recipient.
+   *
+   * @param recipient Recipient of the NFT.
+   * @param tokenId Identifier of the generated NFT.
+   * @param uri URI of the generated NFT.
+   */
+  protected abstract byte[] mintAction(BlockchainAddress recipient, BigInteger tokenId, String uri);
 }

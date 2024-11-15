@@ -34,10 +34,22 @@ public abstract class NftAuctionTest extends JunitContractTest {
   private static final byte ENDED = 2;
   private static final long auctionEndTime = 3 * 60 * 60 * 1000;
 
+  /** Definition of auction contract. Not nullable. */
   private final ContractBytes contractBytesAuction;
+
+  /** Definition of the token contract. Not nullable. */
   private final ContractBytes contractBytesToken;
+
+  /** Definition of the NFT contract. Not nullable. */
   private final ContractBytes contractBytesNft;
 
+  /**
+   * Constructor for {@link NftAuctionTest}.
+   *
+   * @param contractBytesAuction Definition of auction contract. Not nullable.
+   * @param contractBytesToken Definition of the token contract. Not nullable.
+   * @param contractBytesNft Definition of the NFT contract. Not nullable.
+   */
   protected NftAuctionTest(
       ContractBytes contractBytesAuction,
       ContractBytes contractBytesToken,

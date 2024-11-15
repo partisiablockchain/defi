@@ -159,11 +159,26 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
     }
   }
 
+  /**
+   * Swap inputToken for the outputToken, with a minimal amount of expected output.
+   *
+   * @param swapper Account of user that is swapping.
+   * @param tokenInput Input token.
+   * @param amountInput Amount of input token to deposit.
+   */
   protected final void swap(
       BlockchainAddress swapper, BlockchainAddress tokenInput, BigInteger amountInput) {
     swap(swapper, tokenInput, amountInput, BigInteger.ONE);
   }
 
+  /**
+   * Swap inputToken for the outputToken, with a given amount of expected output.
+   *
+   * @param swapper Account of user that is swapping.
+   * @param tokenInput Input token.
+   * @param amountInput Amount of input token to deposit.
+   * @param amountOutputMinimum Amount of output token that must be output before allowing the swap.
+   */
   protected final void swap(
       BlockchainAddress swapper,
       BlockchainAddress tokenInput,
@@ -173,16 +188,29 @@ public abstract class LiquiditySwapBaseTest extends JunitContractTest {
     blockchain.sendAction(swapper, swapContractAddress, rpc);
   }
 
+  /**
+   * Assert that the {@link exchangeRate} is currently some amount.
+   *
+   * @param precision Amount of precision in the exchange rate.
+   * @param expectedExchangeRate The expected exchange rate.
+   */
   protected final void validateExchangeRate(int precision, BigInteger expectedExchangeRate) {
     Assertions.assertThat(exchangeRate(precision))
         .as("Exchange rate")
         .isEqualTo(expectedExchangeRate);
   }
 
+  /**
+   * Assert that the given user has a specific amount of balance deposited into the swap contract.
+   *
+   * @param swapper Account of the user.
+   * @param token Token to check valance for.
+   * @param amount The expected amount of token balance.
+   */
   protected final void validateBalance(
-      BlockchainAddress swapper, BlockchainAddress tokenInput, BigInteger amountInput) {
-    Assertions.assertThat(swapDepositBalance(swapper, tokenInput))
+      BlockchainAddress swapper, BlockchainAddress token, BigInteger amount) {
+    Assertions.assertThat(swapDepositBalance(swapper, token))
         .as("Balance of user: " + swapper)
-        .isEqualTo(amountInput);
+        .isEqualTo(amount);
   }
 }

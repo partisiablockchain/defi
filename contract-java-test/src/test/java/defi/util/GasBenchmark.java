@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.junit.TestBlockchain;
+import com.partisiablockchain.serialization.LargeByteArray;
 import java.io.PrintStream;
 import java.time.Duration;
 import java.util.List;
@@ -23,7 +24,10 @@ public final class GasBenchmark {
    * @param rpc RPC to send.
    */
   public record TestCase(
-      String name, BlockchainAddress sender, BlockchainAddress contractAddress, byte[] rpc) {
+      String name,
+      BlockchainAddress sender,
+      BlockchainAddress contractAddress,
+      LargeByteArray rpc) {
 
     /** Create new {@link TestCase} instance. */
     public TestCase {
@@ -31,6 +35,19 @@ public final class GasBenchmark {
       assertNotNull(sender);
       assertNotNull(contractAddress);
       assertNotNull(rpc);
+    }
+
+    /**
+     * Constructor for {@link TestCase}.
+     *
+     * @param name Name of the test case.
+     * @param sender Sender of the test invocation.
+     * @param contractAddress Contract address to send to.
+     * @param rpc RPC to send.
+     */
+    public TestCase(
+        String name, BlockchainAddress sender, BlockchainAddress contractAddress, byte[] rpc) {
+      this(name, sender, contractAddress, new LargeByteArray(rpc));
     }
   }
 
@@ -76,7 +93,7 @@ public final class GasBenchmark {
                 testCase.name(),
                 testCase.sender(),
                 testCase.contractAddress(),
-                testCase.rpc());
+                testCase.rpc().getData());
 
         printStream.print("\t" + benchmarkInfo.minimumGas());
         printStream.print("\t" + benchmarkInfo.duration().toNanos());

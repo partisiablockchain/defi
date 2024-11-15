@@ -273,7 +273,10 @@ impl TokenBalances {
         let token_in_a = self.token_a_address == token_in_token_address;
         let token_in_b = self.token_b_address == token_in_token_address;
         if !token_in_a && !token_in_b {
-            panic!("token_in invalid token address")
+            panic!(
+                "Unknown token {}. Contract only supports {} or {}",
+                token_in_token_address, self.token_a_address, self.token_b_address
+            )
         }
         self.deduce_tokens_in_out_b(token_in_a)
     }

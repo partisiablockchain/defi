@@ -65,11 +65,6 @@ impl MPC20Contract {
     /// Guarantees that the invocation does not fail due to insufficient gas.
     pub const GAS_COST_APPROVE: GasCost = 3000;
 
-    /// Gas amount sufficient for MPC20 [`MPC20Contract::approve_relative`] invocation.
-    ///
-    /// Guarantees that the invocation does not fail due to insufficient gas.
-    pub const GAS_COST_APPROVE_RELATIVE: GasCost = 1400;
-
     /// Create new token contract representation for the given `contract_address`.
     ///
     /// It is expected that the given address indicates a [MPC20

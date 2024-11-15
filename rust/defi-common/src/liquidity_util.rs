@@ -46,7 +46,7 @@ pub struct AcquiredLiquidityLockInformation {
 ///
 /// * `swap_amount_in`: [`TokenAmount`] - The amount being swapped.
 ///
-/// * `swap_fee_per_mille`: [`u16`] - The fee to take out of swapped to amount. Must be in [`ALLOWED_FEE_PER_MILLE`].
+/// * `swap_fee_per_mille`: [`u16`] - The fee to take out of swapped to amount. Must be in range `0..1000`.
 ///
 /// # Returns
 /// The amount received after swapping. [`TokenAmount`]
