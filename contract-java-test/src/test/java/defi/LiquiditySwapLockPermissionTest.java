@@ -1,5 +1,6 @@
 package defi;
 
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwapLock;
 import com.partisiablockchain.language.abicodegen.Token;
@@ -7,12 +8,11 @@ import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
 import java.math.BigInteger;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.List;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 
 /** {@link LiquiditySwapLock} permission and timeout testing. */
+@CheckReturnValue
 public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBaseTest {
   private static final ContractBytes CONTRACT_BYTES =
       ContractBytes.fromPbcFile(
@@ -70,11 +70,6 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
   @Override
   BlockchainAddress contractTokenD() {
     return null;
-  }
-
-  @BeforeEach
-  void setUp() {
-    lockTrackerAB = new HashSet<>();
   }
 
   @ContractTest
@@ -145,26 +140,26 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
   @ContractTest(previous = "contractInitAnybody")
   void anybodyAcquireLock() {
     // Creator can acquire locks.
-    lock(contractOwnerAddress, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
-    lock(contractOwnerAddress, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
+    acquireLock(contractOwnerAddress, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
+    acquireLock(contractOwnerAddress, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
 
     // Two other users can also acquire locks.
-    lock(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
-    lock(nonOwnerAddress1, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
+    acquireLock(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
+    acquireLock(nonOwnerAddress1, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
 
-    lock(nonOwnerAddress2, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
-    lock(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
+    acquireLock(nonOwnerAddress2, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
+    acquireLock(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, ZERO);
   }
 
   /** Only allowed users can acquire locks, when the permission is specific. */
   @ContractTest(previous = "contractInitSpecific")
   void specificUserAcquireLock() {
     // The allowed user can acquire locks.
-    lock(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
+    acquireLock(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO);
 
     // A user without permissions cannot acquire a lock.
     Assertions.assertThatCode(
-            () -> lock(nonOwnerAddress2, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO))
+            () -> acquireLock(nonOwnerAddress2, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining(
             "Address Account %s did not have permission \"lock swap\"",
@@ -172,7 +167,7 @@ public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBase
 
     // Even the creator cannot acquire a lock, when not permitted to.
     Assertions.assertThatCode(
-            () -> lock(contractOwnerAddress, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO))
+            () -> acquireLock(contractOwnerAddress, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, ZERO))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining(
             "Address Account %s did not have permission \"lock swap\"",
