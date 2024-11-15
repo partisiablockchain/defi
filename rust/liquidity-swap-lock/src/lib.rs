@@ -21,7 +21,7 @@ use defi_common::liquidity_util::{
 use defi_common::math::{assert_is_per_mille, u128_sqrt};
 use defi_common::permission::Permission;
 use defi_common::token_balances::DepositToken;
-use defi_common::token_balances::{TokenAmount, TokenBalance, TokenBalances, TokensInOut};
+use defi_common::token_balances::{TokenAmount, TokenBalances, TokensInOut};
 
 /// Stores data about a lock, which is later used when the lock is executed or cancelled.
 #[derive(ReadWriteState, CreateTypeSpec)]
@@ -32,25 +32,22 @@ pub struct LiquidityLock {
     owner: Address,
 }
 
-/// Type representing difference in [`TokenAmount`]
-type TokenDelta = i128;
-
 /// Keeps track of the 'virtual' liquidity that is held in locks.
 #[derive(CreateTypeSpec, ReadWriteState)]
-struct LockLiquidity {
-    /// Amount of liquidity of A tokens held in locks.
-    pub a_tokens: TokenDelta,
-    /// Amount of liquidity of B tokens held in locks.
-    pub b_tokens: TokenDelta,
+struct LockSums {
+    /// Tracks the sum of the A input amounts in locks.
+    pub sum_of_lock_amounts_a: TokenAmount,
+    /// Tracks the sum of the B input amounts in locks.
+    pub sum_of_lock_amounts_b: TokenAmount,
 }
 
-impl LockLiquidity {
+impl LockSums {
     /// Retrieves a mutable reference to the amount of `token` held in locks.
-    pub fn get_mut_amount_of(&mut self, token: DepositToken) -> &mut TokenDelta {
+    pub fn get_mut_sum_of_lock_amounts_of(&mut self, token: DepositToken) -> &mut TokenAmount {
         if token == DepositToken::A {
-            &mut self.a_tokens
+            &mut self.sum_of_lock_amounts_a
         } else {
-            &mut self.b_tokens
+            &mut self.sum_of_lock_amounts_b
         }
     }
 }
@@ -63,8 +60,8 @@ pub struct VirtualState {
     /// Stores lock information needed to execute or cancel locks.
     locks: AvlTreeMap<LiquidityLockId, LiquidityLock>,
     /// The sum total of the liquidity held in locks.
-    /// This must maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
-    lock_liquidity: LockLiquidity,
+    /// This must maintain the invariant: virtual_liquidity = liquidity_liquidity + `lock_sums`.
+    lock_sums: LockSums,
 }
 
 impl Default for VirtualState {
@@ -76,14 +73,14 @@ impl Default for VirtualState {
 impl VirtualState {
     /// A new virtual state contains no locks and starts `lock_id` at the initial id.
     pub fn new() -> Self {
-        let lock_liquidity = LockLiquidity {
-            a_tokens: 0,
-            b_tokens: 0,
+        let lock_sums = LockSums {
+            sum_of_lock_amounts_a: 0,
+            sum_of_lock_amounts_b: 0,
         };
         Self {
             next_lock_id: LiquidityLockId::initial_id(),
             locks: AvlTreeMap::new(),
-            lock_liquidity,
+            lock_sums,
         }
     }
 
@@ -91,16 +88,13 @@ impl VirtualState {
     ///
     /// The next unique lock id will be associated with `lock` and returned.
     /// Updates the lock liquidity based on `lock` input and output amounts,
-    /// to maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
+    /// to maintain the invariant: virtual_liquidity = liquidity_liquidity + `lock_sums`.
     fn add_lock(&mut self, lock: LiquidityLock) -> LiquidityLockId {
         let lock_id = self.next_lock_id();
 
         *self
-            .lock_liquidity
-            .get_mut_amount_of(lock.tokens_in_out.token_in) += lock.amount_in as TokenDelta;
-        *self
-            .lock_liquidity
-            .get_mut_amount_of(lock.tokens_in_out.token_out) -= lock.amount_out as TokenDelta;
+            .lock_sums
+            .get_mut_sum_of_lock_amounts_of(lock.tokens_in_out.token_in) += lock.amount_in;
 
         self.locks.insert(lock_id, lock);
 
@@ -110,7 +104,7 @@ impl VirtualState {
     /// Removes a lock from the virtual state, if `lock_id` is a valid id, and associated with `sender`.
     ///
     /// Removing the lock also updates the virtual liquidity state, based on the input and output amounts,
-    /// to maintain the invariant: virtual_liquidity = actual_liquidity + `lock_liquidity`.
+    /// to maintain the invariant: virtual_liquidity = liquidity_liquidity + `lock_sums`.
     fn remove_lock(&mut self, lock_id: LiquidityLockId, sender: Address) -> LiquidityLock {
         let lock = self
             .locks
@@ -125,41 +119,21 @@ impl VirtualState {
         self.locks.remove(&lock_id);
 
         *self
-            .lock_liquidity
-            .get_mut_amount_of(lock.tokens_in_out.token_in) -= lock.amount_in as TokenDelta;
-        *self
-            .lock_liquidity
-            .get_mut_amount_of(lock.tokens_in_out.token_out) += lock.amount_out as TokenDelta;
+            .lock_sums
+            .get_mut_sum_of_lock_amounts_of(lock.tokens_in_out.token_in) -= lock.amount_in;
 
         lock
     }
 
-    /// Returns the virtual pool state, guaranteed to be `actual_a` + sum(lock_a), `actual_b` + sum(lock_b).
-    fn virtual_liquidity_pools(
-        &mut self,
-        actual_a: TokenAmount,
-        actual_b: TokenAmount,
-    ) -> TokenBalance {
-        TokenBalance {
-            a_tokens: actual_a
-                .checked_add_signed(self.lock_liquidity.a_tokens)
-                .unwrap(),
-            b_tokens: actual_b
-                .checked_add_signed(self.lock_liquidity.b_tokens)
-                .unwrap(),
-            liquidity_tokens: 0,
-        }
-    }
-
-    /// Returns an id for a requested lock, and updates state for a future lock id.
+    /// Allocate new [`LiquidityLockId `]. The state will not create the same lock id again.
     fn next_lock_id(&mut self) -> LiquidityLockId {
         let res = self.next_lock_id;
         self.next_lock_id = self.next_lock_id.next();
         res
     }
 
-    /// True if locks currently exists, otherwise false.
-    pub fn any_locked_liquidity(&self) -> bool {
+    /// True if no locks currently exist. False otherwise.
+    pub fn no_locked_liquidity(&self) -> bool {
         self.locks.is_empty()
     }
 }
@@ -453,6 +427,11 @@ pub fn provide_liquidity(
     token_address: Address,
     amount: TokenAmount,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
+    assert!(
+        state.virtual_state.no_locked_liquidity(),
+        "Cannot provide liquidity while locks are present."
+    );
+
     let user = &context.sender;
     let tokens = state.token_balances.deduce_tokens_in_out(token_address);
     let contract_token_balance = state
@@ -506,7 +485,7 @@ pub fn reclaim_liquidity(
     liquidity_token_amount: TokenAmount,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     assert!(
-        state.virtual_state.any_locked_liquidity(),
+        state.virtual_state.no_locked_liquidity(),
         "Cannot reclaim liquidity while locks are present."
     );
 
@@ -662,7 +641,7 @@ fn lock_internal(
 ) -> (LiquidityLockId, TokenAmount) {
     let tokens = state.token_balances.deduce_tokens_in_out(token_in);
 
-    let amount_out = calculate_minimum_swap_to_amount(state, amount_in, &tokens);
+    let amount_out = calculate_swap_to_amount_accounting_for_locks(state, amount_in, &tokens);
 
     if amount_out < amount_out_minimum {
         panic!(
@@ -746,7 +725,6 @@ pub fn cancel_lock(
     lock_id: LiquidityLockId,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     state.virtual_state.remove_lock(lock_id, context.sender);
-
     (state, vec![])
 }
 
@@ -760,42 +738,38 @@ fn initial_liquidity_tokens(
     u128_sqrt(token_a_amount * token_b_amount).into()
 }
 
-/// Given a fee, calculates the minimum amount of output tokens received between
-/// the actual and virtual pool states when swapping `swap_amount_in` input tokens.
+/// Given a fee, calculates the amount of output tokens received when swapping and accounting for
+/// locked liquidity in either direction.
 ///
-/// If there are locks present the states of the actual and virtual pools don't match,
-/// and the exchange rate is given as the minimum exchange rate between the actual and virtual pools,
-/// as calculated by [`calculate_swap_to_amount`].
+/// The state tracks the extremum values of the exchange rates within the [`LockSums`].
+///
 /// When no locks are present, this is equivalent to [`calculate_swap_to_amount`].
-fn calculate_minimum_swap_to_amount(
+fn calculate_swap_to_amount_accounting_for_locks(
     state: &mut LiquiditySwapContractState,
     amount_in: TokenAmount,
     tokens_in_out: &TokensInOut,
 ) -> TokenAmount {
-    let actual_balance = state
+    let liquidity_balance = state
         .token_balances
         .get_balance_for(&state.liquidity_pool_address);
 
-    let actual_a = actual_balance.get_amount_of(DepositToken::A);
-    let actual_b = actual_balance.get_amount_of(DepositToken::B);
-    let virtual_balance = state
-        .virtual_state
-        .virtual_liquidity_pools(actual_a, actual_b);
+    let liquidity_a = liquidity_balance.get_amount_of(DepositToken::A);
+    let liquidity_b = liquidity_balance.get_amount_of(DepositToken::B);
 
-    let non_locked_rate = calculate_swap_to_amount(
-        actual_balance.get_amount_of(tokens_in_out.token_in),
-        actual_balance.get_amount_of(tokens_in_out.token_out),
+    let sum_of_lock_amounts_in = liquidity_a
+        + *state
+            .virtual_state
+            .lock_sums
+            .get_mut_sum_of_lock_amounts_of(tokens_in_out.token_in);
+    let pool_token_in = sum_of_lock_amounts_in;
+    let pool_token_out = (liquidity_a * liquidity_b) / sum_of_lock_amounts_in;
+
+    calculate_swap_to_amount(
+        pool_token_in,
+        pool_token_out,
         amount_in,
         state.swap_fee_per_mille,
-    );
-    let locked_rate = calculate_swap_to_amount(
-        virtual_balance.get_amount_of(tokens_in_out.token_in),
-        virtual_balance.get_amount_of(tokens_in_out.token_out),
-        amount_in,
-        state.swap_fee_per_mille,
-    );
-
-    non_locked_rate.min(locked_rate)
+    )
 }
 
 /// Finds the equivalent value of the output token during [`provide_liquidity`] based on the input amount and the weighted shares that they correspond to. <br>

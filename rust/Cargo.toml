@@ -19,7 +19,7 @@ members = [
 ]
 
 [workspace.package]
-version = "4.452.0"
+version = "4.452.1"
 description = "Decentralized Finance contracts for the Partisia BlockChain."
 homepage = "https://gitlab.com/partisiablockchain/language/contracts/defi"
 repository = "https://gitlab.com/partisiablockchain/language/contracts/defi"

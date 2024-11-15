@@ -1,17 +1,21 @@
 package defi;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquiditySwapLock;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.codegenlib.AvlTreeMap;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import java.math.BigInteger;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.assertj.core.api.Assertions;
 
 /** Utility for {@link LiquiditySwapLock} testing. */
+@CheckReturnValue
 public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
   abstract BlockchainAddress swapLockContractAddressAtoB();
 
@@ -24,10 +28,6 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
   abstract BlockchainAddress contractTokenC();
 
   abstract BlockchainAddress contractTokenD();
-
-  static Set<LiquiditySwapLock.LiquidityLockId> lockTrackerAB;
-  static Set<LiquiditySwapLock.LiquidityLockId> lockTrackerBC;
-  static Set<LiquiditySwapLock.LiquidityLockId> lockTrackerCD;
 
   static final BigInteger ZERO = BigInteger.ZERO;
 
@@ -57,8 +57,16 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
       BlockchainAddress token,
       BigInteger amount,
       BigInteger minimumOut) {
+    final BigInteger liquidity1 = getContractLiquidityConstantAfterLocksExecuted(swapContract);
+
     blockchain.sendAction(
         swapper, swapContract, LiquiditySwapLock.instantSwap(token, amount, minimumOut));
+
+    final BigInteger liquidity2 = getContractLiquidityConstantAfterLocksExecuted(swapContract);
+
+    Assertions.assertThat(liquidity2)
+        .as("Liquidity constant must never decrease due to an instant swap.")
+        .isGreaterThanOrEqualTo(liquidity1);
     assertLiquidityInvariant(swapContract);
   }
 
@@ -162,27 +170,45 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
   void assertLiquidityInvariant(BlockchainAddress swapAddress) {
     LiquiditySwapLock.LiquiditySwapContractState swapState = getSwapState(swapAddress);
 
-    LiquiditySwapLock.LockLiquidity lockLiquidityState = swapState.virtualState().lockLiquidity();
+    LiquiditySwapLock.LockSums lockSumsAsTrackedInState = swapState.virtualState().lockSums();
 
-    BigInteger virtualLiquidityFromLocksA = ZERO;
-    BigInteger virtualLiquidityFromLocksB = ZERO;
-    for (var entry : swapState.virtualState().locks().getNextN(null, 1000)) {
-      LiquiditySwapLock.LiquidityLock lock = entry.getValue();
+    BigInteger lockSumDerivedFromLockA = ZERO;
+    BigInteger lockSumDerivedFromLockB = ZERO;
+    for (LiquiditySwapLock.LiquidityLock lock : getLocks(swapState)) {
       if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenA())) {
-        virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.add(lock.amountIn());
-        virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.subtract(lock.amountOut());
+        lockSumDerivedFromLockA = lockSumDerivedFromLockA.add(lock.amountIn());
       } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenB())) {
-        virtualLiquidityFromLocksA = virtualLiquidityFromLocksA.subtract(lock.amountOut());
-        virtualLiquidityFromLocksB = virtualLiquidityFromLocksB.add(lock.amountIn());
+        lockSumDerivedFromLockB = lockSumDerivedFromLockB.add(lock.amountIn());
       } else {
         assert false;
       }
     }
 
-    LiquiditySwapLock.LockLiquidity lockLiquidityLocks =
-        new LiquiditySwapLock.LockLiquidity(virtualLiquidityFromLocksA, virtualLiquidityFromLocksB);
+    LiquiditySwapLock.LockSums lockSumsDerivedFromLocks =
+        new LiquiditySwapLock.LockSums(lockSumDerivedFromLockA, lockSumDerivedFromLockB);
 
-    Assertions.assertThat(lockLiquidityState).isEqualTo(lockLiquidityLocks);
+    Assertions.assertThat(lockSumsAsTrackedInState)
+        .as(
+            "Invariant: Sum locks derived from state must be equal to sum of locks maintained in"
+                + " the state")
+        .isEqualTo(lockSumsDerivedFromLocks);
+  }
+
+  List<LiquiditySwapLock.LiquidityLock> getLocks(BlockchainAddress swapAddress) {
+    return getLocks(getSwapState(swapAddress));
+  }
+
+  List<LiquiditySwapLock.LiquidityLock> getLocks(
+      LiquiditySwapLock.LiquiditySwapContractState swapState) {
+    return swapState.virtualState().locks().getNextN(null, 1000).stream()
+        .map(Map.Entry::getValue)
+        .toList();
+  }
+
+  Set<LiquiditySwapLock.LiquidityLockId> getLockIds(BlockchainAddress swapAddress) {
+    return getVirtualSwapState(swapAddress).locks().getNextN(null, 1000).stream()
+        .map(Map.Entry::getKey)
+        .collect(Collectors.toSet());
   }
 
   void depositIntoSwap(
@@ -200,59 +226,79 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
     depositIntoSwap(swapLockContractAddressAtoB(), sender, contractToken, amount);
   }
 
-  LiquiditySwapLock.LiquidityLockId lock(
+  @CanIgnoreReturnValue
+  LiquiditySwapLock.LiquidityLockId acquireLock(
       BlockchainAddress lockContract,
       BlockchainAddress locker,
       BlockchainAddress token,
       BigInteger inAmount,
       BigInteger minimumOut) {
+
+    final BigInteger liquidity1 = getContractLiquidityConstantAfterLocksExecuted(lockContract);
+
+    final Set<LiquiditySwapLock.LiquidityLockId> existingLocks = getLockIds(lockContract);
+
     // Get the lock.
     blockchain.sendAction(
         locker, lockContract, LiquiditySwapLock.acquireSwapLock(token, inAmount, minimumOut));
     assertLiquidityInvariant(lockContract);
 
+    final BigInteger liquidity2 = getContractLiquidityConstantAfterLocksExecuted(lockContract);
+
+    Assertions.assertThat(liquidity2)
+        .as("Liquidity constant must never decrease due to acquiring a lock.")
+        .isGreaterThanOrEqualTo(liquidity1);
+
     // Get the id of the lock we just acquired, by checking for changes in state.
-    Set<LiquiditySwapLock.LiquidityLockId> lockTracker = getCorrespondingLockTracker(lockContract);
-    Set<LiquiditySwapLock.LiquidityLockId> newLocks =
-        new HashSet<>(
-            getVirtualSwapState(lockContract).locks().getNextN(null, 1000).stream()
-                .map(Map.Entry::getKey)
-                .toList());
-    newLocks.removeAll(lockTracker);
-    LiquiditySwapLock.LiquidityLockId lock = newLocks.iterator().next();
-    lockTracker.add(lock);
-    return lock;
+    final Set<LiquiditySwapLock.LiquidityLockId> newLocks = getLockIds(lockContract);
+    newLocks.removeAll(existingLocks);
+
+    Assertions.assertThat(newLocks)
+        .as("The set of new locks in the state must be precisely one")
+        .hasSize(1);
+
+    return newLocks.iterator().next();
   }
 
-  LiquiditySwapLock.LiquidityLockId lock(
+  @CanIgnoreReturnValue
+  LiquiditySwapLock.LiquidityLockId acquireLock(
       BlockchainAddress locker,
       BlockchainAddress token,
       BigInteger inAmount,
       BigInteger minimumOut) {
-    return lock(swapLockContractAddressAtoB(), locker, token, inAmount, minimumOut);
+    return acquireLock(swapLockContractAddressAtoB(), locker, token, inAmount, minimumOut);
+  }
+
+  void cancelLock(
+      BlockchainAddress lockContract,
+      BlockchainAddress sender,
+      LiquiditySwapLock.LiquidityLockId lockId) {
+    blockchain.sendAction(sender, lockContract, LiquiditySwapLock.cancelLock(lockId));
+
+    // Check other invariants
+    assertLiquidityInvariant(lockContract);
   }
 
   void executeLockSwap(
       BlockchainAddress sender,
       BlockchainAddress swapContract,
       LiquiditySwapLock.LiquidityLockId lockId) {
+
+    final BigInteger liquidity1 = getContractLiquidityConstantAfterLocksExecuted(swapContract);
+
     blockchain.sendAction(sender, swapContract, LiquiditySwapLock.executeLockSwap(lockId));
+
+    final BigInteger liquidity2 = getContractLiquidityConstantAfterLocksExecuted(swapContract);
+
+    Assertions.assertThat(liquidity2)
+        .as("Liquidity constant must never decrease due to executing a swap lock.")
+        .isGreaterThanOrEqualTo(liquidity1);
+
     assertLiquidityInvariant(swapContract);
   }
 
   void executeLockSwap(BlockchainAddress sender, LiquiditySwapLock.LiquidityLockId lockId) {
     executeLockSwap(sender, swapLockContractAddressAtoB(), lockId);
-  }
-
-  private Set<LiquiditySwapLock.LiquidityLockId> getCorrespondingLockTracker(
-      BlockchainAddress swapContract) {
-    if (swapContract.equals(swapLockContractAddressAtoB())) {
-      return lockTrackerAB;
-    } else if (swapContract.equals(swapLockContractAddressBtoC())) {
-      return lockTrackerBC;
-    } else {
-      return lockTrackerCD;
-    }
   }
 
   BigInteger calculateEquivalentLiquidity(
@@ -315,6 +361,30 @@ public abstract class LiquiditySwapLockBaseTest extends JunitContractTest {
             """,
             locks.getNextN(null, 1000), lock, actualLock);
     throw new AssertionError(assertionMsg);
+  }
+
+  BigInteger getContractLiquidityConstantAfterLocksExecuted(BlockchainAddress swapContract) {
+    final var liq = getActualContractBalance(swapContract);
+    if (liq == null) {
+      return BigInteger.ZERO;
+    }
+
+    BigInteger a = liq.aTokens();
+    BigInteger b = liq.bTokens();
+
+    for (LiquiditySwapLock.LiquidityLock lock : getLocks(swapContract)) {
+      if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenA())) {
+        a = a.add(lock.amountIn());
+        b = b.subtract(lock.amountOut());
+      } else if (lock.tokensInOut().tokenIn().equals(new LiquiditySwapLock.DepositTokenTokenB())) {
+        b = b.add(lock.amountIn());
+        a = a.subtract(lock.amountOut());
+      } else {
+        assert false;
+      }
+    }
+
+    return a.multiply(b);
   }
 
   LiquiditySwapLock.TokenBalance getActualContractBalance(BlockchainAddress swapContract) {

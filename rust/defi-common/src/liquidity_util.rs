@@ -20,7 +20,10 @@ impl LiquidityLockId {
     /// Returns a new [`LiquidityLockId`], which comes next after `self`.
     pub fn next(&self) -> Self {
         LiquidityLockId {
-            raw_id: self.raw_id + 1,
+            raw_id: self
+                .raw_id
+                .checked_add(1)
+                .expect("All possible LiquidityLockIds have been assigned"),
         }
     }
 }
