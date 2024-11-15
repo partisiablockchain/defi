@@ -467,7 +467,7 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
     final BlockchainAddress address =
         blockchain.deployContract(creator, contractBytesToken, initRpc);
 
-    final Mpc20LikeState state = deserializeState(address);
+    final Mpc20LikeState state = getContractState(address);
 
     assertThat(state.name()).isEqualTo(tokenName);
     assertThat(state.symbol()).isEqualTo(tokenSymbol);
@@ -476,12 +476,12 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
   }
 
   private BigInteger allowance(final BlockchainAddress owner, final BlockchainAddress spender) {
-    final Mpc20LikeState state = deserializeState(tokenContract);
+    final Mpc20LikeState state = getContractState(tokenContract);
     return state.allowance(owner, spender);
   }
 
   private BigInteger balance(final BlockchainAddress owner) {
-    final Mpc20LikeState state = deserializeState(tokenContract);
+    final Mpc20LikeState state = getContractState(tokenContract);
     final BigInteger balance = state.balances().get(owner);
     return balance == null ? BigInteger.ZERO : balance;
   }
@@ -491,7 +491,7 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
    * contain zero-entries and that the sum of all the saved balances should equal the total supply.
    */
   private void assertStateInvariants() {
-    final Mpc20LikeState state = deserializeState(tokenContract);
+    final Mpc20LikeState state = getContractState(tokenContract);
     BigInteger allAssignedBalances = BigInteger.ZERO;
 
     for (final var balance : state.balances().values()) {
@@ -522,5 +522,11 @@ public abstract class Mpc20LikeTest extends JunitContractTest {
     BigInteger allowance(BlockchainAddress owner, BlockchainAddress spender);
   }
 
-  protected abstract Mpc20LikeState deserializeState(BlockchainAddress address);
+  /**
+   * Gets the state of the token contract with the given address.
+   *
+   * @param contractAddress Address of the contract. Not nullable.
+   * @return MPC-20 like state. Not nullable.
+   */
+  protected abstract Mpc20LikeState getContractState(BlockchainAddress contractAddress);
 }

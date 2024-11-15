@@ -4,7 +4,7 @@ to perform swaps between different [Tokens](../token/README.md), that might not 
 
 ## How does it work
 A swap between two tokens, A, D, without a direct swap contract: A -/> D, can be performed if there exist intermediary swaps,
-that connect the two tokens (a swap route): A -> B -> C -> D, by way of swap contracts AB, BC and CD. 
+that connect the two tokens (a swap route): A -> B -> C -> D, by way of swap contracts AB, BC and CD.
 The router contract handles communication with and between the swap contracts of the route,
 and ensures that swaps are performed atomically, i.e. either:
 - The entire A -> B -> C -> D swap happens, taking the user's A tokens and producing D tokens exclusively.
@@ -17,13 +17,14 @@ From start to finish the swap happens in 4 distinct phases:
 - User requests router to route the swap, with specific swap contracts.
 - The router validates the route. See [valid route](#valid-route)
 - The router takes control of the user tokens, so user cannot interfere in the
-swap process.
+  swap process.
 
 #### Locking
+
 After a route has been validated, the router acquires all locks on the route:
 - The router tries to acquire a lock at the next swap contract.
-  - If successful, the swap contract returns the output amount of the lock
-  - If unsuccessful, the router cancels all acquired locks and aborts
+   * If successful, the swap contract returns the output amount of the lock
+   * If unsuccessful, the router cancels all acquired locks and aborts
 - Repeat lock acquisition until all locks are acquired
 
 Lock acquisition is done iteratively with a callback between every acquisition, to use the lock output
@@ -40,7 +41,7 @@ After lock acquisition is finished, execution of the locks start:
 These steps are done with a callback between every interaction, to guarantee correct ordering of the events,
 since approval must happen before depositing, which must happen before execution.
 
-Additionally, when withdrawing, [`wait_for_callback`](../defi-common/src/interact_swap.rs) is used, 
+Additionally, when withdrawing, [`wait_for_callback`](../defi-common/src/interact_swap.rs) is used,
 to ensure tokens have been withdrawn before continuing the execution of the next lock.
 
 #### Withdrawal

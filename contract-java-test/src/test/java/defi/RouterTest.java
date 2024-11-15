@@ -14,9 +14,8 @@ import org.junit.jupiter.api.Nested;
 public final class RouterTest extends JunitContractTest {
 
   private static final ContractBytes ROUTER_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/swap_router.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/swap_router.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/swap_router.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/swap_router_runner"));
 
   @Nested

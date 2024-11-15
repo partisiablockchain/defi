@@ -21,9 +21,8 @@ public final class SwapFactoryTest extends JunitContractTest {
 
   /** {@link DexSwapFactory} contract bytes. */
   public static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/dex_swap_factory.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/dex_swap_factory.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/dex_swap_factory.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/dex_swap_factory_runner"));
 
   private static final BigInteger TOTAL_SUPPLY =

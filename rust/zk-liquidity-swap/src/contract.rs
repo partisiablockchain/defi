@@ -650,7 +650,7 @@ pub fn close_pools(
     (state, vec![])
 }
 
-/// * HELPER FUNCTIONS *
+// * HELPER FUNCTIONS *
 
 /// Type used for swap amounts.
 ///

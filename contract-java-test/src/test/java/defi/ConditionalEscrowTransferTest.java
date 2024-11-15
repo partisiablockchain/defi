@@ -15,16 +15,13 @@ import org.assertj.core.api.Assertions;
 public final class ConditionalEscrowTransferTest extends JunitContractTest {
 
   private static final ContractBytes CONDITIONAL_ESCROW_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/conditional_escrow_transfer.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/conditional_escrow_transfer.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/conditional_escrow_transfer.pbc"),
           Path.of(
               "../rust/target/wasm32-unknown-unknown/release/conditional_escrow_transfer_runner"));
 
   private static final ContractBytes TOKEN_CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.abi"));
+      ContractBytes.fromPbcFile(Path.of("../rust/target/wasm32-unknown-unknown/release/token.pbc"));
 
   private BlockchainAddress doge;
   private BlockchainAddress conditionalEscrow;

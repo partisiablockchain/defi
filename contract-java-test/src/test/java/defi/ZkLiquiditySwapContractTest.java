@@ -6,6 +6,7 @@ import com.partisiablockchain.language.abicodegen.ZkLiquiditySwap;
 import com.partisiablockchain.language.junit.ContractBytes;
 import defi.properties.DepositWithdrawTest;
 import defi.properties.LiquiditySwapZkTest;
+import java.math.BigInteger;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Nested;
 
@@ -14,9 +15,8 @@ public final class ZkLiquiditySwapContractTest {
 
   /** {@link LiquiditySwap} contract bytes. */
   private static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/zk_liquidity_swap.zkwa"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/zk_liquidity_swap.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/zk_liquidity_swap.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/zk_liquidity_swap_runner"));
 
   @Nested
@@ -35,6 +35,13 @@ public final class ZkLiquiditySwapContractTest {
     @Override
     protected byte[] initContractUnderTestRpc(BlockchainAddress token1, BlockchainAddress token2) {
       return ZkLiquiditySwap.initialize(token1, token2, (short) 0);
+    }
+
+    @Override
+    protected BigInteger getDepositAmount(BlockchainAddress owner) {
+      final var state = new ZkLiquiditySwap(getStateClient(), contractUnderTestAddress).getState();
+      final var ownerBalances = state.tokenBalances().balances().get(owner);
+      return ownerBalances == null ? BigInteger.ZERO : ownerBalances.aTokens();
     }
   }
 }

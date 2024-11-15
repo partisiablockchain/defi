@@ -15,9 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 /** {@link LiquiditySwapLock} permission and timeout testing. */
 public final class LiquiditySwapLockPermissionTest extends LiquiditySwapLockBaseTest {
   private static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/liquidity_swap_lock_runner"));
 
   private static final BigInteger ZERO = BigInteger.ZERO;

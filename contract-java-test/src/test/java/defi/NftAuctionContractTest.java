@@ -11,9 +11,8 @@ public final class NftAuctionContractTest {
 
   /** Contract bytes for {@link NftAuction} contract. */
   static final ContractBytes CONTRACT_BYTES =
-      ContractBytes.fromPaths(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_auction.wasm"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_auction.abi"),
+      ContractBytes.fromPbcFile(
+          Path.of("../rust/target/wasm32-unknown-unknown/release/nft_auction.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/nft_auction_runner"));
 
   @Nested
