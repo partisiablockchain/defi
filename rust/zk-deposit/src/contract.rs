@@ -543,10 +543,7 @@ pub fn create_account(
         },
     );
 
-    // Reserve gas for account creation computation
-    let mut event_groups = vec![];
-    reserve_gas_for_contract(&context, &mut event_groups, 10_000);
-    (state, event_groups, input_def)
+    (state, vec![], input_def)
 }
 
 /// Automatically invoked when user has completed input of [`create_account`].
@@ -603,13 +600,10 @@ pub fn deposit(
         amount,
     );
 
-    const RESERVE_AMOUNT: u64 = 20_000;
-
     event_group_builder
         .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
         .argument(context.sender)
         .argument(amount)
-        .with_cost(1_000 + RESERVE_AMOUNT)
         .done();
 
     (state, vec![event_group_builder.build()])
@@ -741,7 +735,6 @@ pub fn withdraw(
             amount,
         },
     );
-    reserve_gas_for_contract(&context, &mut event_groups, 10_000);
     (state, event_groups, zk_state_change)
 }
 
@@ -851,26 +844,13 @@ pub fn fail_in_separate_action(
 /// not be possible to make a denial of service attack by inputting a failing [`WorkListItem`].
 fn fail_safely(context: &ContractContext, event_groups: &mut Vec<EventGroup>, error_message: &str) {
     const SHORTNAME_FAIL_IN_SEPARATE_ACTION: u8 = 0x4C;
-    let cost_fail_in_separate_action: u64 = 400 + 6 * error_message.len() as u64;
 
     let mut event_group_builder = EventGroup::builder();
     event_group_builder
         .call(context.contract_address, Shortname::from_u32(0x09)) // Public invocation prefix
         .argument(SHORTNAME_FAIL_IN_SEPARATE_ACTION) // Shortname
         .argument(String::from(error_message)) // Error message
-        .with_cost(cost_fail_in_separate_action)
         .done();
 
-    event_groups.push(event_group_builder.build());
-}
-
-/// Utility for creating events that add gas to the contract.
-fn reserve_gas_for_contract(
-    context: &ContractContext,
-    event_groups: &mut Vec<EventGroup>,
-    amount: u64,
-) {
-    let mut event_group_builder = EventGroup::builder();
-    event_group_builder.ping(context.contract_address, Some(amount));
     event_groups.push(event_group_builder.build());
 }
