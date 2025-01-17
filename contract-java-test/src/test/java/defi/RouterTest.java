@@ -25,7 +25,7 @@ public final class RouterTest extends JunitContractTest {
           TokenContractTest.CONTRACT_BYTES,
           LiquiditySwapLockTest.CONTRACT_BYTES,
           ROUTER_CONTRACT_BYTES,
-          200_000L,
+          500_000L,
           150);
     }
 
@@ -44,7 +44,7 @@ public final class RouterTest extends JunitContractTest {
           TokenV2Test.CONTRACT_BYTES,
           LiquiditySwapLockTest.CONTRACT_BYTES,
           ROUTER_CONTRACT_BYTES,
-          200_000L,
+          500_000L,
           500);
     }
 

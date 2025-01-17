@@ -56,11 +56,9 @@ impl NFTContractState {
     ///
     /// An [`Address`] for the owner of the NFT.
     pub fn owner_of(&self, token_id: u128) -> Address {
-        let owner_opt = self.owners.get(&token_id);
-        match owner_opt {
-            None => panic!("MPC-721: owner query for nonexistent token"),
-            Some(owner) => owner,
-        }
+        self.owners
+            .get(&token_id)
+            .expect("MPC-721: owner query for nonexistent token")
     }
 
     /// Get the approved address for a single NFT.
@@ -166,7 +164,7 @@ impl NFTContractState {
     }
 }
 
-/// Initial function to bootstrap the contracts state.
+/// Create a new NFT contract, with a name, symbol and URI template. No NFTs are minted initially.
 ///
 /// ### Parameters:
 ///
@@ -200,8 +198,10 @@ pub fn initialize(
     }
 }
 
+/// User allows another user or contract to [`transfer_from`] their NFT. Each NFT can only have a single approved account.
+///
 /// Change or reaffirm the approved address for an NFT.
-/// None indicates there is no approved address.
+/// `approved==None` revokes any existing approved address.
 /// Throws unless `ctx.sender` is the current NFT owner, or an authorized
 /// operator of the current owner.
 ///
@@ -233,8 +233,10 @@ pub fn approve(
     state
 }
 
-/// Enable or disable approval for a third party (operator) to manage all of
-/// `ctx.sender`'s assets. Throws if `operator` == `ctx.sender`.
+/// User allows another user or contract ("operator") to manage all of their NFTs for them. Operators can do everything the real owner can.
+/// Each token can only have a single operator.
+///
+/// Throws if `operator` == `ctx.sender`.
 ///
 /// ### Parameters:
 ///
@@ -271,9 +273,9 @@ pub fn set_approval_for_all(
     state
 }
 
-/// Transfer ownership of an NFT.
+/// Transfer ownership of an NFT to recipient.
 ///
-/// Throws unless `ctx.sender` is the current owner, an authorized
+/// User must have permission to perform the transfer: Throws unless `ctx.sender` is the current owner, an authorized
 /// operator, or the approved address for this NFT. Throws if `from` is
 /// not the current owner. Throws if `token_id` is not a valid NFT.
 ///
@@ -308,7 +310,7 @@ pub fn transfer_from(
     }
 }
 
-/// Mints `token_id` and transfers it to an owner.
+/// Create a new NFT, and send it to the specified recipient. Only the contract owner can use this.
 ///
 /// Requirements:
 ///
@@ -347,9 +349,11 @@ pub fn mint(
     }
 }
 
-/// Destroys `token_id`.
-/// The approval is cleared when the token is burned.
+/// Destroy a NFT with id `token_id`.
+///
 /// Requires that the `token_id` exists and `ctx.sender` is approved or owner of the token.
+///
+/// The approval is cleared when the token is burned.
 ///
 /// ### Parameters:
 ///

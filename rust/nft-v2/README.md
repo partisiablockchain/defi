@@ -1,21 +1,42 @@
-# NFT
-This is an example non-fungible token (NFT) smart contract.
+# NFT v2 (MPC-721-v2)
 
-The contract provides basic functionality to track and transfer NFTs.
+An example of a NFT (Non-Fungible Token) smart contract for Partisia
+Blockchain, implementing the MPC-721-v2 standard.
 
-The contract works using a mint method for creating new bindings of NFTs to accounts.
+## Background, NFT
 
-An NFT is identified via an u128 tokenID.
-Any token owner can then `transfer` their tokens to other accounts, or `approve` other accounts
-to transfer their tokens.
-If Alice has been approved an NFT from Bob, then Alice can use `transfer_from` to transfer Bob's tokens.
+An NFT is a unique identifier managed by an NFT contract, that can be
+transfered between accounts on the blockchain. NFTs can be used in much the
+same way as [MPC-20 tokens](../token-v2) can, but NFTs represent specific
+instances of an object (non-fungible like a physical book; there are many like
+it, but the one sitting on your bookshelf is yours and has a history), whereas
+[tokens](../token-v2) are interchangable (fungible; like money in a bank
+account).
 
-Each token can only be approved to a single account.
-Any token owner can also make another account an operator of their tokens using `set_approval_for_all`.
+NFTs are often associated with specific artworks, which are publically
+accessible by a unique link stored in the contract; artwork is rarely stored
+on-chain.
 
-An operator is approved to manage all NFTs owned by the owner, this includes setting approval on each token and transfer.
+Some NFT contracts also manage additional attributes associated with each NFT,
+for example their history of ownership. This functionality is not implemented
+by `nft-v2`.
+
+## Implementation
+
+This example follows the mpc-721-v2 standard contract interface. You can read more about this standard here:  [https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html)
 
 The contract is inspired by the ERC721 NFT contract with extensions for Metadata and Burnable\
 [https://github.com/ethereum/EIPs/blob/master/EIPS/eip-721.md](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-721.md)
 
-This example follows the mpc-721-v2 standard contract interface. You can read more about this standard here:  [https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-721-nft-contract.html)
+## Extensions
+
+This contract is meant as a jumping off point to making your own NFTs. Here are
+some ideas:
+
+- NFT attributes: Track anything you want! This can include ownership history,
+  rarity, game stats, etc.
+- On-chain generation: Partisia Blockchain REAL/ZK allows for true randomness.
+  Generate your attributes on-chain and store your images off-chain.
+- User-requested minting: With on-chain generation your can allow your users to
+  mint their own NFTs. Then you can limit them to a certain amount, or let them
+  run amok.

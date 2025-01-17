@@ -1,3 +1,4 @@
+//! Testing of the mathematical formulas of the contract.
 use proptest::prelude::*;
 use zk_liquidity_swap::{calculate_swap_to_amount, TokenSwapAmount};
 

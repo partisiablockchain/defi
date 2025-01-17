@@ -1,3 +1,4 @@
+//! Testing of the mathematical formulas of the contract.
 use defi_common::liquidity_util::calculate_swap_to_amount;
 use defi_common::token_balances::DepositToken;
 use liquidity_swap::*;
