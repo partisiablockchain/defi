@@ -1,4 +1,8 @@
-# NFT
+# NFT v1 (MPC-721-v1)
+
+**This contract has been superceeded by the [NFT v2 contract](../nft-v2), which
+is significantly cheaper. It is also better documented.**
+
 This is an example non-fungible token (NFT) smart contract.
 
 The contract provides basic functionality to track and transfer NFTs.

@@ -9,8 +9,6 @@ use pbc_contract_common::events::EventGroup;
 
 use defi_common::interact_mpc20::MPC20Contract;
 
-/// Constants for different phases of the contract.
-
 /// Initial state after contract creation.
 const STATE_CREATED: u8 = 0;
 /// State after tokens have been transferred to the contract.

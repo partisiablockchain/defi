@@ -1144,7 +1144,7 @@ public abstract class RoutingTest extends JunitContractTest {
                 randomRoute.finalToken,
                 randomRoute.initialAmount,
                 BigInteger.ONE),
-            283_904L);
+            285_000L);
     executeTxExecutionInUnpredictableOrder(repetitionInfo, List.of(s1));
 
     assertTokenBalanceNotZero(randomRoute.finalToken, routeUser);
