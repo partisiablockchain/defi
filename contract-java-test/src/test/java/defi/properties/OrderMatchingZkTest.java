@@ -3,7 +3,7 @@ package defi.properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.rpc.FnRpcBuilder;
+import com.partisiablockchain.language.abiclient.rpc.RpcContractBuilder;
 import com.partisiablockchain.language.abiclient.zk.ZkInputBuilder;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.abicodegen.ZkOrderMatching;
@@ -308,7 +308,8 @@ public abstract class OrderMatchingZkTest extends JunitContractTest {
       BlockchainAddress boughtToken,
       BigInteger inputAmount,
       BigInteger outputAmount) {
-    final FnRpcBuilder builder = new FnRpcBuilder("place_order", contractAbiOrderMatch.contract());
+    final RpcContractBuilder builder =
+        new RpcContractBuilder(contractAbiOrderMatch.contract(), "place_order");
     final ZkInputBuilder zkBuilder =
         ZkInputBuilder.createZkInputBuilder("place_order", contractAbiOrderMatch.contract());
 
