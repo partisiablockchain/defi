@@ -142,9 +142,9 @@ mod test {
         let end_input_range = 10000000;
 
         for _ in 0..=100000 {
-            let input_a: u64 = rng.gen_range(1..=end_input_range);
-            let a_pool: u64 = rng.gen_range(1..=end_input_range);
-            let b_pool: u64 = rng.gen_range(1..=end_input_range);
+            let input_a: u64 = rng.random_range(1..=end_input_range);
+            let a_pool: u64 = rng.random_range(1..=end_input_range);
+            let b_pool: u64 = rng.random_range(1..=end_input_range);
 
             let output_b: TokenAmount = calculate_swap_to_amount(
                 a_pool as TokenAmount,
@@ -257,13 +257,13 @@ mod test {
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         let end_range = 10000;
         for _ in 0..101 {
-            let mut pool_a: TokenAmount = rng.gen_range(1..=end_range);
-            let mut pool_b: TokenAmount = rng.gen_range(1..=end_range);
+            let mut pool_a: TokenAmount = rng.random_range(1..=end_range);
+            let mut pool_b: TokenAmount = rng.random_range(1..=end_range);
             let mut total_minted_liquidity: TokenAmount = u128_sqrt(pool_a * pool_b).into();
             let mut constant_product = pool_a * pool_b;
 
             for _ in 0..10001 {
-                let provided_a_tokens = rng.gen_range(1..=end_range);
+                let provided_a_tokens = rng.random_range(1..=end_range);
                 let provided_b_tokens_float_floor = pool_b * provided_a_tokens / pool_a;
                 let minted_liquidity_float_floor =
                     total_minted_liquidity * provided_a_tokens / pool_a;
@@ -299,14 +299,14 @@ mod test {
     pub fn calculate_calculate_reclaim_output_stress_test() {
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         for _ in 0..1001 {
-            let mut pool_a: TokenAmount = rng.gen_range(1..10001);
-            let mut pool_b: TokenAmount = rng.gen_range(1..10001);
+            let mut pool_a: TokenAmount = rng.random_range(1..10001);
+            let mut pool_b: TokenAmount = rng.random_range(1..10001);
             let mut total_minted_liquidity: TokenAmount = u128_sqrt(pool_a * pool_b).into();
             let mut constant_product = pool_a * pool_b;
 
             for _ in 0..101 {
                 let total_minted_liquidity_copy = total_minted_liquidity; // immutable range
-                let provided_minted_liquidity = rng.gen_range(1..total_minted_liquidity_copy);
+                let provided_minted_liquidity = rng.random_range(1..total_minted_liquidity_copy);
 
                 let output_a_float_floor =
                     pool_a * provided_minted_liquidity / total_minted_liquidity;
@@ -349,8 +349,8 @@ mod test {
     pub fn zero_cases() {
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
         // Some state
-        let e: TokenAmount = rng.gen_range(1..10001);
-        let t: TokenAmount = rng.gen_range(1..10001);
+        let e: TokenAmount = rng.random_range(1..10001);
+        let t: TokenAmount = rng.random_range(1..10001);
         let l: TokenAmount = u128_sqrt(e * t).into();
 
         let delta_e: TokenAmount = 0;

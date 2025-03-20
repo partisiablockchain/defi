@@ -23,9 +23,9 @@ pbc_contract_codegen.workspace = true
 defi_common = { path = "../defi-common" }
 
 [dev-dependencies]
-rand = "0.8.5"
-rand_chacha = "0.3.1"
-proptest = "1.4.0"
+rand.workspace = true
+rand_chacha.workspace = true
+proptest.workspace = true
 
 [features]
 abi = ["pbc_contract_common/abi", "pbc_contract_codegen/abi", "pbc_traits/abi", "create_type_spec_derive/abi", "defi_common/abi"]

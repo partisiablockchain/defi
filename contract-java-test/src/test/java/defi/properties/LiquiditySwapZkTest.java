@@ -3,7 +3,7 @@ package defi.properties;
 import static java.util.Map.entry;
 
 import com.partisiablockchain.BlockchainAddress;
-import com.partisiablockchain.language.abiclient.rpc.FnRpcBuilder;
+import com.partisiablockchain.language.abiclient.rpc.RpcContractBuilder;
 import com.partisiablockchain.language.abiclient.zk.ZkInputBuilder;
 import com.partisiablockchain.language.abicodegen.Token;
 import com.partisiablockchain.language.abicodegen.ZkLiquiditySwap;
@@ -671,7 +671,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
 
   private byte[] swapPublicRpc(boolean onlyIfAtFront) {
     FileAbi fileAbi = new AbiParser(contractBytesSwap.abi()).parseAbi();
-    final FnRpcBuilder builder = new FnRpcBuilder("swap", fileAbi.contract());
+    final RpcContractBuilder builder = new RpcContractBuilder(fileAbi.contract(), "swap");
     builder.addBool(onlyIfAtFront);
     return builder.getBytes();
   }
