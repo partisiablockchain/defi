@@ -1,10 +1,9 @@
+# ZK Order Matching
 
-# ZK Order Matching Example Contract
+Order matching contract using secret-sharing to hide orders until a match have
+been found.
 
-This contract implements a simple order matching algorithm in ZK, allowing for
-secret orders.
-
-This contract operates a similar deposit mechanism to liquidity swap, requiring
+Operates a similar deposit mechanism to liquidity swap, requiring
 users to deposit some amount of tokens before being able to place orders.
 
 User flow:

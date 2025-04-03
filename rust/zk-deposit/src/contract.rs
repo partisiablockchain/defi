@@ -19,7 +19,8 @@ use read_write_state_derive::ReadWriteState;
 use std::collections::VecDeque;
 
 use pbc_zk::SecretBinary;
-mod zk_compute;
+/// Submodule for MPC computations.
+pub mod zk_compute;
 
 /// Type used to represent token amounts. Equal to the MPC20 token sizes.
 pub type TokenAmount = interact_mpc20::TokenTransferAmount;
@@ -31,19 +32,19 @@ pub type PendingTransferId = u32;
 #[state]
 pub struct ContractState {
     /// Mapping from account addresses to the id of the account's [`zk_compute::DepositBalanceSecrets`].
-    balances: AvlTreeMap<Address, SecretVarId>,
+    pub balances: AvlTreeMap<Address, SecretVarId>,
     /// Queue of [`WorkListItem`]s that is still waiting to be started. Items can only be started when the
     /// preceeding computation has finished.
-    work_queue: VecDeque<WorkListItem>,
+    pub work_queue: VecDeque<WorkListItem>,
     /// List of transfers that have not been approved by the approver.
-    transfers_yet_to_be_approved: AvlTreeMap<PendingTransferId, TransferData>,
+    pub transfers_yet_to_be_approved: AvlTreeMap<PendingTransferId, TransferData>,
     /// User that may approve transfers between users.
-    transfer_approver: Address,
+    pub transfer_approver: Address,
     /// Address of the token contract that this contract operates over.
-    token_address: Address,
+    pub token_address: Address,
     /// List of variables that have been marked redundant. These will be removed after the next
     /// computation have finished, and may contain variables that are used by the computation.
-    redundant_variables: Vec<SecretVarId>,
+    pub redundant_variables: Vec<SecretVarId>,
     /// Hacky work-around needed to include `VariableKind` in the ABI. This field is unused.
     _ignored_variable_kind: Option<VariableKind>,
 }
@@ -92,7 +93,7 @@ impl VariableKind {
     ///
     /// The [`ContractState::transfer_variables_to_owner`] method ensures that the variable is
     /// owned by this address.
-    fn owner(&self) -> &Address {
+    pub fn owner(&self) -> &Address {
         match self {
             VariableKind::DepositBalance { owner } => owner,
             VariableKind::WorkItemData { owner } => owner,
@@ -204,7 +205,7 @@ impl ContractState {
     /// It is not possible to run [`ContractState::attempt_to_start_next_in_queue`] in the same event as
     /// [`ContractState::clean_up_redundant_secret_variables`], as the latter may remove secret
     /// variables, while the first iterates all variables, and these cannot be done synchronized.
-    fn attempt_to_start_next_in_queue(
+    pub fn attempt_to_start_next_in_queue(
         &mut self,
         context: &ContractContext,
         zk_state: &ZkState<VariableKind>,
@@ -347,7 +348,7 @@ impl ContractState {
     /// - Transfer ownership of any given variable to the [`VariableKind::owner()`].
     /// - Older [`VariableKind::DepositBalance`] are deleted
     /// - [`VariableKind::DepositBalance`] are stored in the [`ContractState::balances`] map.
-    fn transfer_variables_to_owner(
+    pub fn transfer_variables_to_owner(
         &mut self,
         zk_state: &ZkState<VariableKind>,
         output_variables: Vec<SecretVarId>,
@@ -385,7 +386,7 @@ impl ContractState {
     /// It is not possible to run [`ContractState::attempt_to_start_next_in_queue`] in the same event as
     /// [`ContractState::clean_up_redundant_secret_variables`], as the latter may remove secret
     /// variables, while the first iterates all variables, and these cannot be done synchronized.
-    fn clean_up_redundant_secret_variables(&mut self, state_changes: &mut Vec<ZkStateChange>) {
+    pub fn clean_up_redundant_secret_variables(&mut self, state_changes: &mut Vec<ZkStateChange>) {
         state_changes.push(ZkStateChange::DeleteVariables {
             variables_to_delete: self.redundant_variables.clone(),
         });
@@ -666,7 +667,7 @@ pub fn simple_work_item_complete(
 /// It is not possible to run [`ContractState::attempt_to_start_next_in_queue`] in the same event as
 /// [`ContractState::clean_up_redundant_secret_variables`], as the latter may remove secret
 /// variables, while the first iterates all variables, and these cannot be done synchronized.
-fn trigger_continue_queue_if_needed(
+pub fn trigger_continue_queue_if_needed(
     context: ContractContext,
     state: &ContractState,
     event_groups: &mut Vec<EventGroup>,
@@ -842,7 +843,11 @@ pub fn fail_in_separate_action(
 ///
 /// This is done to prevent stalling the queue, as individual [`WorkListItem`]s are that can fail, but it should
 /// not be possible to make a denial of service attack by inputting a failing [`WorkListItem`].
-fn fail_safely(context: &ContractContext, event_groups: &mut Vec<EventGroup>, error_message: &str) {
+pub fn fail_safely(
+    context: &ContractContext,
+    event_groups: &mut Vec<EventGroup>,
+    error_message: &str,
+) {
     const SHORTNAME_FAIL_IN_SEPARATE_ACTION: u8 = 0x4C;
 
     let mut event_group_builder = EventGroup::builder();

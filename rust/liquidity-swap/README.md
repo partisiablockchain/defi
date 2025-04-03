@@ -1,33 +1,38 @@
 # Liquidity Swap
+
+Automated Market Maker Contract that allows users to exchange tokens, with an
+automatically selected exchange rate based on the available liquidity in the
+contract pools.
+
+## Specification
+
 This contract is based on [UniSwap v1](https://hackmd.io/@HaydenAdams/HJ9jLsfTz?type=view)
 
-The contracts exchanges (or swaps) between two types of tokens, 
+Allows exchanges (swaps) between two types of tokens, with an the exchange rate as given by the `constant product formula: x * y = k`.
 
-with an the exchange rate as given by the `constant product formula: x * y = k`. 
+We consider `x` to be the balance of token pool A and `y` to be the balance of token pool B and `k` to be their product.
 
-We consider `x` to be the balance of token pool A and `y` to be the balance of token pool B and `k` to be their product. 
-
-When performing a swap, a fee of 0.3% is applied, based on the input amount, which is deducted from the output of the swap. 
+When performing a swap, a fee of 0.3% is applied, based on the input amount, which is deducted from the output of the swap.
 
 This effectively increases `k` after each swap.
 
 In order to perform a swap, it is a prerequisite that the swapping user has already transferred
-at least one of the tokens to the contract via a call to [`deposit`]. 
+at least one of the tokens to the contract via a call to [`deposit`].
 
-Additionally, some user (typically the creator of the contract) must have already deposited an amount of both token types and initialized both pools by a call to [`provide_initial_liquidity`]. 
+Additionally, some user (typically the creator of the contract) must have already deposited an amount of both token types and initialized both pools by a call to [`provide_initial_liquidity`].
 
 A user may [`withdraw`] the resulting tokens of a swap (or simply his own deposited tokens)
 to have the tokens transferred to his account, at any point.
 
 Finally, a user may choose to become a liquidity provider (LP) of the contract
 by providing an amount of pre-deposited tokens taken from the user's internal token balance.
-This yields the LP a share of the contract's total liquidity, based on the ratio between the amount of provided liquidity and the contract's total liquidity at the time of providing. 
+This yields the LP a share of the contract's total liquidity, based on the ratio between the amount of provided liquidity and the contract's total liquidity at the time of providing.
 
-These shares are referred to as `liquidity tokens` which are minted upon becoming an LP and may later be burned to receive a proportionate share of the contract's liquidity. 
+These shares are referred to as `liquidity tokens` which are minted upon becoming an LP and may later be burned to receive a proportionate share of the contract's liquidity.
 
 Since `k` increases between swaps, an LP stands to profit from burning their liquidity token after x amount of swaps has occurred.
 
-The larger the shares an LP has, the larger the profit. 
+The larger the shares an LP has, the larger the profit.
 
 However, as with all investing, an LP also risks losing profit if the market-clearing price of at least one of the tokens decreases to a point that exceeds the rewards gained from swap-fees.
 

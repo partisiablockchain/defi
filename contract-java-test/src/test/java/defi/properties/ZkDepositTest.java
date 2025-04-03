@@ -183,7 +183,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   void failToCreateTheSameUserAccountTwice() {
     createAccount(accountSender, RECIPIENT_KEY_SENDER);
     Assertions.assertThatCode(() -> createAccount(accountSender, RECIPIENT_KEY_SENDER))
-        .hasMessageContaining("Cannot create new user when account already exists");
+        .hasStackTraceContaining("Cannot create new user when account already exists");
 
     assertInvariantsAtIdle();
   }
@@ -200,7 +200,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
     // Deposit
     approveDeposit(accountNoAccount, BigInteger.valueOf(1_000));
     Assertions.assertThatCode(() -> deposit(accountNoAccount, BigInteger.valueOf(1_000)))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "User does not possess an account: 00C5DCB3BCF6F048B0A765184B55B3F8D89DEA7377");
 
     assertInvariantsAtIdle();
@@ -223,7 +223,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
     // Attempt transfer again
     Assertions.assertThatCode(() -> approveTransfer(accountApprover, transferId))
-        .hasMessageContaining("Could not find a pending request with id " + transferId);
+        .hasStackTraceContaining("Could not find a pending request with id " + transferId);
 
     assertDepositBalance(accountSender, 600);
     assertDepositBalance(accountRecipient, 400);
@@ -241,7 +241,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
     // Approve transfer
     Assertions.assertThatCode(() -> approveTransfer(accountSender, transferId))
-        .hasMessageContaining("Approver is the only user that can approve transfers");
+        .hasStackTraceContaining("Approver is the only user that can approve transfers");
 
     assertDepositBalance(accountSender, 1_000);
     assertDepositBalance(accountRecipient, 0);
@@ -255,7 +255,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   void failToApproveNonExistingTransfer() {
     // Attempt transfer again
     Assertions.assertThatCode(() -> approveTransfer(accountApprover, 999))
-        .hasMessageContaining("Could not find a pending request with id 999");
+        .hasStackTraceContaining("Could not find a pending request with id 999");
 
     assertDepositBalance(accountSender, 1_000);
     assertDepositBalance(accountRecipient, 0);
@@ -283,7 +283,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
     // Approve transfer
     Assertions.assertThatCode(() -> approveTransfer(accountApprover, transferId))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "User does not possess an account: 00C5DCB3BCF6F048B0A765184B55B3F8D89DEA7377");
 
     assertDepositBalance(accountSender, 1_000);
@@ -369,7 +369,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   @Previous("createUserAccounts")
   void failToWithdrawForUserWithoutAccount() {
     Assertions.assertThatCode(() -> withdraw(accountNoAccount, BigInteger.valueOf(400)))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "User does not possess an account: 00C5DCB3BCF6F048B0A765184B55B3F8D89DEA7377");
 
     assertDepositBalance(accountNoAccount, null);
@@ -401,7 +401,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   void failToWithdrawHugeAmounts() {
     Assertions.assertThatCode(
             () -> withdraw(accountRecipient, new BigInteger("FFFFFFFFFFFFFFFF", 16)))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "Insufficient deposit balance! Could not withdraw 18446744073709551615 tokens, as user"
                 + " do not have that amount deposited");
 
@@ -444,7 +444,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   void continueQueueCannotBeCalledDirectlyByUsers() {
     Assertions.assertThatCode(
             () -> sendActionToCut(accountSender, ZkDeposit.continueQueue(), 100_000))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "This is an internal invocation. Must not be invoked by outside users.");
   }
 
