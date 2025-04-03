@@ -140,7 +140,7 @@ fn deposit_large_enough(order_id: SecretVarId, order: Order) -> Sbu1 {
 }
 
 /// Determines whether the given [`PotentialMatch`] is a match fitting the requirements.
-fn is_a_match(potential_match: PotentialMatch) -> Sbu1 {
+pub fn is_a_match(potential_match: PotentialMatch) -> Sbu1 {
     // Not a match when both parts are buying / selling
     let order_swap: Sbu1 = potential_match.buy_b.buy_a != potential_match.buy_a.buy_a;
 

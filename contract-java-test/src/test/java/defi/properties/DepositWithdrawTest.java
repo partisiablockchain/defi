@@ -170,7 +170,7 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     // Send deposit
     Assertions.assertThatCode(() -> deposit(users.get(0), amountDeposit))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "Insufficient AAA allowance for transfer_from! Allowed 1000, but trying to transfer"
                 + " 1001");
 
@@ -208,8 +208,8 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     Assertions.assertThatCode(() -> withdraw(users.get(0), amount))
         .as("amount = " + amount)
         .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("Insufficient")
-        .hasMessageContaining("" + amount);
+        .hasStackTraceContaining("Insufficient")
+        .hasStackTraceContaining("" + amount);
 
     assertDepositAmount(users.get(0), 1_000L);
 
@@ -255,7 +255,7 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
     Assertions.assertThatCode(() -> deposit(users.get(0), amount))
         .as("amount = " + amount)
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "Insufficient AAA tokens for transfer! Have 98000, but trying to transfer " + amount);
 
     assertDepositAmount(users.get(0), 1_000L);
@@ -348,11 +348,11 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
                 sendActionToCut(
                     users.get(0),
                     LiquiditySwap.deposit(unrelatedContractAddress, BigInteger.valueOf(42))))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "Unknown token "
                 + unrelatedContractAddress.writeAsString().toUpperCase(Locale.ROOT)
                 + ". Contract only supports ")
-        .hasMessageContaining(contractTokenA.writeAsString().toUpperCase(Locale.ROOT));
+        .hasStackTraceContaining(contractTokenA.writeAsString().toUpperCase(Locale.ROOT));
   }
 
   /** Users cannot withdraw to a completely unrelated token contract. */
@@ -365,11 +365,11 @@ public abstract class DepositWithdrawTest extends JunitContractTest {
                 sendActionToCut(
                     users.get(0),
                     LiquiditySwap.withdraw(unrelatedContractAddress, BigInteger.valueOf(42), true)))
-        .hasMessageContaining(
+        .hasStackTraceContaining(
             "Unknown token "
                 + unrelatedContractAddress.writeAsString().toUpperCase(Locale.ROOT)
                 + ". Contract only supports ")
-        .hasMessageContaining(contractTokenA.writeAsString().toUpperCase(Locale.ROOT));
+        .hasStackTraceContaining(contractTokenA.writeAsString().toUpperCase(Locale.ROOT));
   }
 
   /**

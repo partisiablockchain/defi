@@ -1,6 +1,9 @@
 # Router
-This contract utilizes the swap lock functionality of the [Liquidity Swap Lock Contract](../liquidity-swap-lock/README.md)
-to perform swaps between different [Tokens](../token/README.md), that might not have a direct swap contract between them.
+
+Routing contract that utilizes the swap lock functionality of the [Liquidity
+Swap Lock Contract](../liquidity-swap-lock/README.md) to perform swaps between
+different [Tokens](../token/README.md), that might not have a direct swap
+contract between them.
 
 ## How does it work
 A swap between two tokens, A, D, without a direct swap contract: A -/> D, can be performed if there exist intermediary swaps,

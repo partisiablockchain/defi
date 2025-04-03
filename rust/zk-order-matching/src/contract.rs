@@ -47,7 +47,7 @@ pub struct Match {
     amount_b: MatchAmountType,
 }
 
-/// Match output value, sent between [`publicize_order_match`] and [`execute_order_match`].
+/// Match output value, sent between [`publicize_order_match`] and [`ContractState::execute_order`].
 #[repr(C)]
 #[derive(CreateTypeSpec, ReadRPC, WriteRPC, Debug)]
 pub struct ResolvedMatch {
@@ -63,7 +63,7 @@ pub struct ResolvedMatch {
 
 impl ContractState {
     /// Executes the given order. Panics if either of the parties is missing tokens.
-    fn execute_order(&mut self, order_match: &ResolvedMatch) {
+    pub fn execute_order(&mut self, order_match: &ResolvedMatch) {
         self.token_balances.move_tokens(
             order_match.a_seller,
             order_match.a_buyer,
@@ -292,11 +292,11 @@ pub fn order_match_complete(
 /// Opens the [`Match`] variable. Might result in an order match, or it might not. In both cases it
 /// will start the next order in queue.
 ///
-/// If an order have been matched, it will trigger [`execute_order_match`].
+/// If an order have been matched, it will trigger [`ContractState::execute_order`].
 ///
 /// Determining and execution of the match have been split to enforce atomicity for each.
 /// [`publicize_order_match`] must _never_ panic, as it will stop the automatic queue. The queue
-/// can at least be restarted by inputting a new value. [`execute_order_match`] _must_ throw if
+/// can at least be restarted by inputting a new value. [`ContractState::execute_order`] _must_ throw if
 /// either of the transfers fails.
 #[zk_on_variables_opened]
 pub fn publicize_order_match(
