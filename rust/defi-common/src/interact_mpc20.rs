@@ -50,17 +50,20 @@ impl MPC20Contract {
     /// Shortname of the [`MPC20Contract::approve`] invocation
     const SHORTNAME_APPROVE: Shortname = Shortname::from_u32(0x05);
 
-    /// Gas amount sufficient for [`MPC20Contract::transfer`] invocation.
+    /// Gas amount sufficient for [`MPC20Contract::transfer`] invocation
+    /// for the following contracts: token-v1, token-v2, and MPC MPC20 token.
     ///
     /// Guarantees that the invocation does not fail due to insufficient gas.
     pub const GAS_COST_TRANSFER: GasCost = 15500;
 
-    /// Gas amount sufficient for MPC20 [`MPC20Contract::transfer_from`] invocation.
+    /// Gas amount sufficient for MPC20 [`MPC20Contract::transfer_from`] invocation
+    /// for the following contracts: token-v1, token-v2, and MPC MPC20 token.
     ///
     /// Guarantees that the invocation does not fail due to insufficient gas.
     pub const GAS_COST_TRANSFER_FROM: GasCost = 15500;
 
-    /// Gas amount sufficient for MPC20 [`MPC20Contract::approve`] invocation.
+    /// Gas amount sufficient for MPC20 [`MPC20Contract::approve`] invocation
+    /// for the following contracts: token-v1, token-v2, and MPC MPC20 token.
     ///
     /// Guarantees that the invocation does not fail due to insufficient gas.
     pub const GAS_COST_APPROVE: GasCost = 3000;

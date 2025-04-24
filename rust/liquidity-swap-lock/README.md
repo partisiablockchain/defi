@@ -1,6 +1,6 @@
 # Liquidity Swap Lock
 
-Automated Market Maker with support for short-termed Option contract-likes.
+Smart contract implementing Automated Market Maker with support for short-termed Option contract-likes.
 
 Extension of the [liquidity swap contract](../liquidity-swap/README.md) with
 the ability to create liquidity locks; short lived guarentees for specific

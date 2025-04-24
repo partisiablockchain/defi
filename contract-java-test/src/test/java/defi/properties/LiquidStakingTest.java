@@ -193,6 +193,19 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertInitialLiquidStakingState();
   }
 
+  /** A user cannot submit if action does not contain enough gas to execute the events. */
+  @ContractTest(previous = "setup")
+  void submitNeedsEnoughGasForEvents() {
+    initialSetup(50, 0, 0, 0);
+
+    byte[] rpc = LiquidStaking.submit(BigInteger.valueOf(20));
+    assertThatThrownBy(() -> blockchain.sendAction(user1, liquidStakingAddress, rpc, 16988))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Cannot allocate gas for events");
+
+    assertLiquidStakingStateInvariant();
+  }
+
   /**
    * The staking responsible can withdraw tokens from the liquid staking contract. Withdrawal does
    * not change the pools or the user balances.
@@ -234,6 +247,23 @@ public abstract class LiquidStakingTest extends JunitContractTest {
         .hasMessageContaining("Cannot withdraw zero tokens");
 
     assertTokenStateForLiquidStakingContract(100);
+    assertLiquidStakingStateInvariant();
+  }
+
+  /**
+   * The staking responsible cannot withdraw if action does not contain enough gas to execute the
+   * events.
+   */
+  @ContractTest(previous = "setup")
+  void withdrawalNeedsEnoughGasForEvents() {
+    initialSetup(100, 0, 0, 0);
+
+    byte[] rpc = LiquidStaking.withdraw(BigInteger.valueOf(20));
+    assertThatThrownBy(
+            () -> blockchain.sendAction(stakingResponsible, liquidStakingAddress, rpc, 16385))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Cannot allocate gas for events");
+
     assertLiquidStakingStateInvariant();
   }
 
@@ -448,6 +478,29 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertLiquidStakingStateInvariant();
   }
 
+  /**
+   * Request unlock does not count expired pending unlocks, when determining total amount of
+   * unlockable tokens.
+   */
+  @ContractTest(previous = "setup")
+  void requestUnlockDoesNotCountExpiredUnlocks() {
+    initialSetup(100, 0, 0, 0);
+
+    requestUnlock(user1, 10);
+
+    waitForRedeemPeriodToExpire();
+
+    requestUnlock(user1, 100);
+
+    assertThat(getPendingUnlocks(user1)).isNotNull();
+    assertThat(getPendingUnlocks(user1)).hasSize(2);
+    assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(10);
+    assertThat(getPendingUnlocks(user1).get(1).liquidAmount()).isEqualTo(100);
+    assertThat(getPendingUnlocks(user1).get(0).stakeTokenAmount()).isEqualTo(10);
+    assertThat(getPendingUnlocks(user1).get(1).stakeTokenAmount()).isEqualTo(100);
+    assertLiquidStakingStateInvariant();
+  }
+
   /** A user cannot request to unlock zero liquid tokens. */
   @ContractTest(previous = "setup")
   void userCannotRequestUnlockOfZeroTokens() {
@@ -470,7 +523,7 @@ public abstract class LiquidStakingTest extends JunitContractTest {
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining(
             "Unlock amount too large. Requested 10 liquid tokens, which is larger than users"
-                + " balance (0) minus existing pending unlocks (0)");
+                + " balance (0) minus existing (non-expired) pending unlocks (0)");
 
     assertThat(getPendingUnlocks(user2)).isNull();
     assertLiquidStakingStateInvariant();
@@ -487,7 +540,7 @@ public abstract class LiquidStakingTest extends JunitContractTest {
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining(
             "Unlock amount too large. Requested 51 liquid tokens, which is larger than users"
-                + " balance (50) minus existing pending unlocks (0)");
+                + " balance (50) minus existing (non-expired) pending unlocks (0)");
 
     assertThat(getPendingUnlocks(user2)).isNull();
     assertLiquidStakingStateInvariant();
@@ -501,23 +554,29 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     initialSetup(50, 0, 50, 0);
 
     requestUnlock(user1, 10);
+
+    waitForRedeemPeriodToExpire();
+
+    requestUnlock(user1, 10);
     requestUnlock(user1, 30);
 
     assertThat(getPendingUnlocks(user1)).isNotNull();
-    assertThat(getPendingUnlocks(user1)).hasSize(2);
+    assertThat(getPendingUnlocks(user1)).hasSize(3);
     assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(10);
-    assertThat(getPendingUnlocks(user1).get(1).liquidAmount()).isEqualTo(30);
+    assertThat(getPendingUnlocks(user1).get(1).liquidAmount()).isEqualTo(10);
+    assertThat(getPendingUnlocks(user1).get(2).liquidAmount()).isEqualTo(30);
 
     assertThatThrownBy(() -> requestUnlock(user1, 11))
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining(
             "Unlock amount too large. Requested 11 liquid tokens, which is larger than users"
-                + " balance (50) minus existing pending unlocks (40)");
+                + " balance (50) minus existing (non-expired) pending unlocks (40)");
 
     assertThat(getPendingUnlocks(user1)).isNotNull();
-    assertThat(getPendingUnlocks(user1)).hasSize(2);
+    assertThat(getPendingUnlocks(user1)).hasSize(3);
     assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(10);
-    assertThat(getPendingUnlocks(user1).get(1).liquidAmount()).isEqualTo(30);
+    assertThat(getPendingUnlocks(user1).get(1).liquidAmount()).isEqualTo(10);
+    assertThat(getPendingUnlocks(user1).get(2).liquidAmount()).isEqualTo(30);
     assertLiquidStakingStateInvariant();
   }
 
@@ -564,6 +623,23 @@ public abstract class LiquidStakingTest extends JunitContractTest {
                 + " transfer 101 (in minimal units)");
 
     assertTokenStateForLiquidStakingContract(0);
+    assertLiquidStakingStateInvariant();
+  }
+
+  /**
+   * The staking responsible cannot deposit if action does not contain enough gas to execute the
+   * events.
+   */
+  @ContractTest(previous = "setup")
+  void depositNeedsEnoughGasForEvents() {
+    initialSetup(100, 0, 100, 0);
+
+    byte[] rpc = LiquidStaking.deposit(BigInteger.valueOf(20));
+    assertThatThrownBy(
+            () -> blockchain.sendAction(stakingResponsible, liquidStakingAddress, rpc, 16988))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Cannot allocate gas for events");
+
     assertLiquidStakingStateInvariant();
   }
 
@@ -759,6 +835,22 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(42);
     assertTokenState(user1, USER_1_FUNDS - 359, USER_1_FUNDS - 359);
     assertTokenStateForLiquidStakingContract(0);
+    assertLiquidStakingStateInvariant();
+  }
+
+  /** A user cannot redeem if action does not contain enough gas to execute the events. */
+  @ContractTest(previous = "setup")
+  void redeemNeedsEnoughGasForEvents() {
+    initialSetup(40, 0, 0, 0);
+
+    requestUnlock(user1, 40);
+    waitForRedeemPeriod();
+
+    byte[] rpc = LiquidStaking.redeem();
+    assertThatThrownBy(() -> blockchain.sendAction(user1, liquidStakingAddress, rpc, 16733))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Cannot allocate gas for events");
+
     assertLiquidStakingStateInvariant();
   }
 
@@ -1046,6 +1138,48 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertLiquidStakingStateInvariant();
   }
 
+  /** The staking responsible can clean up pending unlocks. */
+  @ContractTest(previous = "setup")
+  void stakingResponsibleCanCleanUpPendingUnlocks() {
+    initialSetup(500, 0, 0, 0);
+
+    submit(user2, 400);
+
+    requestUnlock(user1, 500);
+    requestUnlock(user2, 100);
+
+    waitForRedeemPeriodToExpire();
+
+    requestUnlock(user2, 200);
+
+    waitForRedeemPeriod();
+
+    requestUnlock(user2, 50);
+
+    assertThat(getPendingUnlocks(user1)).isNotNull();
+    assertThat(getPendingUnlocks(user1)).hasSize(1);
+    assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(500);
+
+    assertThat(getPendingUnlocks(user2)).isNotNull();
+    assertThat(getPendingUnlocks(user2)).hasSize(3);
+    assertThat(getPendingUnlocks(user2).get(0).liquidAmount()).isEqualTo(100);
+    assertThat(getPendingUnlocks(user2).get(1).liquidAmount()).isEqualTo(200);
+    assertThat(getPendingUnlocks(user2).get(2).liquidAmount()).isEqualTo(50);
+
+    assertLiquidStakingStateInvariant();
+
+    cleanUpPendingUnlocks(stakingResponsible);
+
+    assertThat(getPendingUnlocks(user1)).isNull();
+
+    assertThat(getPendingUnlocks(user2)).isNotNull();
+    assertThat(getPendingUnlocks(user2)).hasSize(2);
+    assertThat(getPendingUnlocks(user2).get(0).liquidAmount()).isEqualTo(200);
+    assertThat(getPendingUnlocks(user2).get(1).liquidAmount()).isEqualTo(50);
+
+    assertLiquidStakingStateInvariant();
+  }
+
   /**
    * A user cannot clean up pending unlocks. Only the administrator has access to clean up pending
    * unlocks.
@@ -1061,7 +1195,8 @@ public abstract class LiquidStakingTest extends JunitContractTest {
         .isInstanceOf(ActionFailureException.class)
         .hasMessageContaining(
             "Cannot clean up pending unlocks. Only the registered administrator (at address:"
-                + " 00B4D7BC4690C2FC52A27BA8734E8633B5613DD0ED) can clean up pending unlocks.");
+                + " 00B4D7BC4690C2FC52A27BA8734E8633B5613DD0ED) or staking responsible (at address:"
+                + " 00F96DB08DBEB7B777E48D993CAF474A410A9B629B) can clean up pending unlocks.");
 
     assertThat(getPendingUnlocks(user1)).isNotNull();
     assertThat(getPendingUnlocks(user1)).hasSize(1);
@@ -1069,246 +1204,56 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertLiquidStakingStateInvariant();
   }
 
-  /**
-   * The staking responsible cannot change the buy in percentage. Only the administrator has access
-   * to clean up pending unlocks.
-   */
+  /** The administrator can upgrade the contract. */
   @ContractTest(previous = "setup")
-  void stakingResponsibleCannotCleanUpPendingUnlocks() {
-    initialSetup(80, 0, 0, 0);
-
-    requestUnlock(user1, 10);
-    waitForRedeemPeriodToExpire();
-
-    assertThatThrownBy(() -> cleanUpPendingUnlocks(stakingResponsible))
-        .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
-            "Cannot clean up pending unlocks. Only the registered administrator (at address:"
-                + " 00B4D7BC4690C2FC52A27BA8734E8633B5613DD0ED) can clean up pending unlocks.");
-
-    assertThat(getPendingUnlocks(user1)).isNotNull();
-    assertThat(getPendingUnlocks(user1)).hasSize(1);
-    assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(10);
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user can transfer some of his liquid tokens to another user. */
-  @ContractTest(previous = "setup")
-  void userCanTransferLiquidTokens() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    transfer(user1, user2, 40);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(10);
-    assertThat(getLiquidBalance(user2)).isEqualTo(40);
-    assertPoolAmounts(50, 50);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user can transfer all of his liquid tokens to another user. */
-  @ContractTest(previous = "setup")
-  void userCanTransferAllLiquidTokens() {
-    initialSetup(53, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(53);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    transfer(user1, user2, 53);
-
-    assertThat(getLiquidBalance(user1)).isNull();
-    assertThat(getLiquidBalance(user2)).isEqualTo(53);
-    assertPoolAmounts(53, 53);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user transferring zero tokens has no effect. */
-  @ContractTest(previous = "setup")
-  void userTransferZeroTokens() {
-    initialSetup(10, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(10);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    transfer(user1, user2, 0);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(10);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertPoolAmounts(10, 10);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user transferring to himself has no effect. */
-  @ContractTest(previous = "setup")
-  void userTransferToSelf() {
-    initialSetup(10, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(10);
-
-    transfer(user1, user1, 4);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(10);
-    assertPoolAmounts(10, 10);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user cannot transfer liquid tokens to another user, if he has no liquid tokens. */
-  @ContractTest(previous = "setup")
-  void userCannotTransferLiquidTokensIfBalanceIsZero() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    assertThatThrownBy(() -> transfer(user2, user1, 30))
-        .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
-            "Insufficient LST tokens for transfer! Have 0, but trying to transfer 30 (in minimal"
-                + " units)");
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertPoolAmounts(50, 50);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user cannot transfer more liquid tokens than what is in his balance. */
-  @ContractTest(previous = "setup")
-  void userCannotTransferMoreLiquidTokensThanInBalance() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    assertThatThrownBy(() -> transfer(user1, user2, 51))
-        .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
-            "Insufficient LST tokens for transfer! Have 50, but trying to transfer 51 (in minimal"
-                + " units)");
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertPoolAmounts(50, 50);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user can approve another user to transfer a number of liquid tokens from her account. */
-  @ContractTest(previous = "setup")
-  void userCanApproveLiquidTokens() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    approve(user1, user2, 40);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(40);
-    assertPoolAmounts(50, 50);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** A user can overwrite the number of approved liquid tokens for another user. */
-  @ContractTest(previous = "setup")
-  void userCanOverwriteApprovedLiquidTokens() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    approve(user1, user2, 40);
-
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(40);
-
-    approve(user1, user2, 5);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(5);
-    assertPoolAmounts(50, 50);
-
-    assertLiquidStakingStateInvariant();
-  }
-
-  /**
-   * A user that is approved to transfer from another user can perform a transfer, and the allowance
-   * amount is reduced accordingly.
-   */
-  @ContractTest(previous = "setup")
-  void userCanTransferApprovedTokens() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    approve(user1, user2, 40);
-
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(40);
-
-    transferFrom(user2, user1, user3, 30);
+  void adminCanUpgrade() {
+    initialSetup(20, 0, 0, 0);
 
     assertThat(getLiquidBalance(user1)).isEqualTo(20);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertThat(getLiquidBalance(user3)).isEqualTo(30);
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(10);
-    assertPoolAmounts(50, 50);
+    assertLiquidStakingStateInvariant();
+
+    blockchain.upgradeContract(
+        admin, liquidStakingAddress, contractBytesLiquidStaking, new byte[0]);
+
+    assertThat(getLiquidBalance(user1)).isEqualTo(20);
+    assertLiquidStakingStateInvariant();
+  }
+
+  /** The staking responsible cannot upgrade the contract. */
+  @ContractTest(previous = "setup")
+  void stakingResponsibleCannotUpgrade() {
+    initialSetup(20, 0, 0, 0);
+
+    assertThat(getLiquidBalance(user1)).isEqualTo(20);
+    assertLiquidStakingStateInvariant();
+
+    assertThatThrownBy(
+            () ->
+                blockchain.upgradeContract(
+                    stakingResponsible,
+                    liquidStakingAddress,
+                    contractBytesLiquidStaking,
+                    new byte[0]))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Contract did not allow this upgrade");
 
     assertLiquidStakingStateInvariant();
   }
 
-  /**
-   * A user that is approved to transfer from another user cannot transfer more tokens than the
-   * amount approved.
-   */
+  /** A user cannot upgrade the contract. */
   @ContractTest(previous = "setup")
-  void cannotTransferMoreThanApprovedAmount() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
+  void userCannotUpgrade() {
+    initialSetup(20, 0, 0, 0);
 
-    approve(user1, user2, 40);
-
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(40);
-
-    assertThatThrownBy(() -> transferFrom(user2, user1, user3, 41))
-        .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
-            "Insufficient LST allowance for transfer_from! Allowed 40, but trying to transfer 41"
-                + " (in minimal units)");
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertThat(getLiquidBalance(user3)).isNull();
-    assertThat(getLiquidAllowance(user1, user2)).isEqualTo(40);
-    assertPoolAmounts(50, 50);
-
+    assertThat(getLiquidBalance(user1)).isEqualTo(20);
     assertLiquidStakingStateInvariant();
-  }
 
-  /**
-   * A user that is not approved to transfer from another user cannot transfer tokens from that
-   * user.
-   */
-  @ContractTest(previous = "setup")
-  void cannotTransferNonApprovedAmount() {
-    initialSetup(50, 0, 0, 0);
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-
-    assertThat(getLiquidAllowance(user1, user2)).isNull();
-
-    assertThatThrownBy(() -> transferFrom(user2, user1, user3, 5))
+    assertThatThrownBy(
+            () ->
+                blockchain.upgradeContract(
+                    user1, liquidStakingAddress, contractBytesLiquidStaking, new byte[0]))
         .isInstanceOf(ActionFailureException.class)
-        .hasMessageContaining(
-            "Insufficient LST allowance for transfer_from! Allowed 0, but trying to transfer 5 (in"
-                + " minimal units)");
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(50);
-    assertThat(getLiquidBalance(user2)).isNull();
-    assertThat(getLiquidBalance(user3)).isNull();
-    assertThat(getLiquidAllowance(user1, user2)).isNull();
-    assertPoolAmounts(50, 50);
+        .hasMessageContaining("Contract did not allow this upgrade");
 
     assertLiquidStakingStateInvariant();
   }
@@ -1332,47 +1277,6 @@ public abstract class LiquidStakingTest extends JunitContractTest {
             + LENGTH_OF_COOLDOWN_PERIOD
             + LENGTH_OF_REDEEM_PERIOD
             + 5);
-  }
-
-  /**
-   * Helper function for making transfer RPC and invoking the transfer action.
-   *
-   * @param account The account that invokes the action, and the owner of the liquid tokens to be
-   *     transferred.
-   * @param to The account that receives the liquid tokens.
-   * @param amount The amount of liquid tokens to be transferred.
-   */
-  private void transfer(BlockchainAddress account, BlockchainAddress to, int amount) {
-    byte[] rpc = LiquidStaking.transfer(to, BigInteger.valueOf(amount));
-    blockchain.sendAction(account, liquidStakingAddress, rpc);
-  }
-
-  /**
-   * Helper function for making transfer_from RPC and invoking the transfer_from action.
-   *
-   * @param account The account that invokes the action.
-   * @param from The account that owns the liquid tokens.
-   * @param to The account that receives the liquid tokens.
-   * @param amount The amount of liquid tokens to be transferred.
-   */
-  private void transferFrom(
-      BlockchainAddress account, BlockchainAddress from, BlockchainAddress to, int amount) {
-    byte[] rpc = LiquidStaking.transferFrom(from, to, BigInteger.valueOf(amount));
-    blockchain.sendAction(account, liquidStakingAddress, rpc);
-  }
-
-  /**
-   * Helper function for making approve RPC and invoking the approve action.
-   *
-   * @param account The account that invokes the action, and the owner of the liquid tokens to be
-   *     approved.
-   * @param spender The account who will get permission to transfer liquid token on behalf of the
-   *     owner.
-   * @param amount The amount of liquid tokens that the spender is allowed to transfer.
-   */
-  private void approve(BlockchainAddress account, BlockchainAddress spender, int amount) {
-    byte[] rpc = LiquidStaking.approve(spender, BigInteger.valueOf(amount));
-    blockchain.sendAction(account, liquidStakingAddress, rpc);
   }
 
   /**
@@ -1485,20 +1389,6 @@ public abstract class LiquidStakingTest extends JunitContractTest {
   private BigInteger getLiquidBalance(final BlockchainAddress user) {
     LiquidStaking.LiquidStakingState state = liquidStakingContract.getState();
     return state.liquidTokenState().balances().get(user);
-  }
-
-  /**
-   * Retrieve the liquid token allowance.
-   *
-   * @param owner A user of the liquid staking contract that owns some liquid tokens.
-   * @param spender A user of the liquid staking contract who is allowed to transfer tokens on
-   *     behalf of the owner.
-   * @return The amount of liquid tokens the owner has allowed the spender to transfer.
-   */
-  private BigInteger getLiquidAllowance(
-      final BlockchainAddress owner, final BlockchainAddress spender) {
-    LiquidStaking.LiquidStakingState state = liquidStakingContract.getState();
-    return state.liquidTokenState().allowed().get(new LiquidStaking.AllowedAddress(owner, spender));
   }
 
   /**

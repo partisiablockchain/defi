@@ -1,30 +1,22 @@
 #![doc = include_str!("../README.md")]
 
+mod upgrade;
+
 #[macro_use]
 extern crate pbc_contract_codegen;
 
 use std::ops::Sub;
 
 use create_type_spec_derive::CreateTypeSpec;
+use defi_common::interact_mpc20;
 use defi_common::token_state::AbstractTokenState;
-use pbc_contract_common::address::{Address, Shortname};
+use pbc_contract_common::address::Address;
 use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
 use pbc_traits::ReadWriteState;
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
-
-/// Token contract actions
-#[inline]
-fn token_contract_transfer() -> Shortname {
-    Shortname::from_u32(0x01)
-}
-
-#[inline]
-fn token_contract_transfer_from() -> Shortname {
-    Shortname::from_u32(0x03)
-}
 
 /// Address pair representing an allowance. Owner allows spender to transfer tokens on behalf of
 /// them.
@@ -244,6 +236,11 @@ impl LiquidStakingState {
         account == self.staking_responsible
     }
 
+    /// Determines whether the specified `account` is allowed to clean pending unlocks.
+    fn is_allowed_to_clean_pending_unlocks(&self, account: Address) -> bool {
+        self.is_the_administrator(account) || self.is_the_staking_responsible(account)
+    }
+
     /// Exchange the specified amount of stake tokens to liquid tokens.
     ///
     /// ## Parameters
@@ -365,7 +362,7 @@ impl LiquidStakingState {
     /// * `liquid_amount`: The amount of liquid tokens to be unlocked.
     /// * `created_at`: The block production time, when the unlock was requested.
     fn add_to_pending_unlocks(&mut self, user: Address, liquid_amount: u128, created_at: u64) {
-        self.assert_whether_user_have_enough_liquidity(user, liquid_amount);
+        self.assert_whether_user_have_enough_liquidity(user, liquid_amount, created_at);
 
         let new_pending_unlock = PendingUnlock {
             liquid_amount,
@@ -385,13 +382,20 @@ impl LiquidStakingState {
     /// ## Parameters
     /// * `user`: The user who requests to unlock.
     /// * `liquid_amount`: The amount of liquid tokens to be unlocked.
-    fn assert_whether_user_have_enough_liquidity(&self, user: Address, liquid_amount: u128) {
+    /// * `current_time`: The block production time.
+    fn assert_whether_user_have_enough_liquidity(
+        &self,
+        user: Address,
+        liquid_amount: u128,
+        current_time: u64,
+    ) {
         let liquid_balance = self.liquid_token_state.balance_of(&user);
-        let current_pending_unlocks = self.total_pending_unlocked_liquid_tokens_for_user(user);
+        let current_pending_unlocks =
+            self.total_non_expired_pending_liquid_tokens_for_user(user, current_time);
 
         if liquid_amount > (liquid_balance - current_pending_unlocks) {
             panic!(
-                "Unlock amount too large. Requested {} liquid tokens, which is larger than users balance ({}) minus existing pending unlocks ({}).",
+                "Unlock amount too large. Requested {} liquid tokens, which is larger than users balance ({}) minus existing (non-expired) pending unlocks ({}).",
                 liquid_amount, liquid_balance, current_pending_unlocks
             )
         }
@@ -422,15 +426,26 @@ impl LiquidStakingState {
         }
     }
 
-    /// Calculate the sum of all liquid tokens in the pending unlocks for the specified user.
+    /// Calculate the sum of all liquid tokens in the (non-expired) pending unlocks for the specified user.
     ///
     /// ## Parameters
     /// * `user`: The user who requests to unlock.
-    fn total_pending_unlocked_liquid_tokens_for_user(&self, user: Address) -> u128 {
+    /// * `current_time`: The block production time.
+    fn total_non_expired_pending_liquid_tokens_for_user(
+        &self,
+        user: Address,
+        current_time: u64,
+    ) -> u128 {
         match self.pending_unlocks.get(&user) {
             None => 0,
-            Some(users_pending_unlocks) => {
-                users_pending_unlocks.iter().map(|x| x.liquid_amount).sum()
+            Some(user_pending_unlocks) => {
+                let mut liquid_amount = 0;
+                for pending_unlock in user_pending_unlocks {
+                    if !pending_unlock.is_expired(current_time) {
+                        liquid_amount += pending_unlock.liquid_amount;
+                    }
+                }
+                liquid_amount
             }
         }
     }
@@ -696,15 +711,16 @@ pub fn submit(
     }
 
     let mut event_group = EventGroup::builder();
-    event_group
-        .call(state.token_for_staking, token_contract_transfer_from())
-        .argument(context.sender)
-        .argument(context.contract_address)
-        .argument(stake_token_amount)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.token_for_staking).transfer_from(
+        &mut event_group,
+        &context.sender,
+        &context.contract_address,
+        stake_token_amount,
+    );
     event_group
         .with_callback(SHORTNAME_SUBMIT_CALLBACK)
         .argument(stake_token_amount)
+        .with_cost(600)
         .done();
     (state, vec![event_group.build()])
 }
@@ -770,11 +786,11 @@ pub fn withdraw(
     state.subtract_from_stake_token_balance(stake_token_amount);
 
     let mut event_group = EventGroup::builder();
-    event_group
-        .call(state.token_for_staking, token_contract_transfer())
-        .argument(context.sender)
-        .argument(stake_token_amount)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.token_for_staking).transfer(
+        &mut event_group,
+        &context.sender,
+        stake_token_amount,
+    );
     (state, vec![event_group.build()])
 }
 
@@ -866,15 +882,16 @@ pub fn deposit(
     }
 
     let mut event_group = EventGroup::builder();
-    event_group
-        .call(state.token_for_staking, token_contract_transfer_from())
-        .argument(context.sender)
-        .argument(context.contract_address)
-        .argument(stake_token_amount)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.token_for_staking).transfer_from(
+        &mut event_group,
+        &context.sender,
+        &context.contract_address,
+        stake_token_amount,
+    );
     event_group
         .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
         .argument(stake_token_amount)
+        .with_cost(600)
         .done();
 
     (state, vec![event_group.build()])
@@ -918,11 +935,11 @@ pub fn redeem(
     let stake_token_amount = state.redeem(context.sender, context.block_production_time as u64);
 
     let mut event_group = EventGroup::builder();
-    event_group
-        .call(state.token_for_staking, token_contract_transfer())
-        .argument(context.sender)
-        .argument(stake_token_amount)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.token_for_staking).transfer(
+        &mut event_group,
+        &context.sender,
+        stake_token_amount,
+    );
     (state, vec![event_group.build()])
 }
 
@@ -997,10 +1014,10 @@ pub fn clean_up_pending_unlocks(
     context: ContractContext,
     mut state: LiquidStakingState,
 ) -> LiquidStakingState {
-    if !state.is_the_administrator(context.sender) {
+    if !state.is_allowed_to_clean_pending_unlocks(context.sender) {
         panic!(
-            "Cannot clean up pending unlocks. Only the registered administrator (at address: {}) can clean up pending unlocks.",
-            state.administrator
+            "Cannot clean up pending unlocks. Only the registered administrator (at address: {}) or staking responsible (at address: {}) can clean up pending unlocks.",
+            state.administrator, state.staking_responsible
         )
     }
     state.clean_up_pending_unlocks(context.block_production_time as u64);

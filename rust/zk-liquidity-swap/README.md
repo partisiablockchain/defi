@@ -1,6 +1,6 @@
 # Front running-protected Liquidity Swap
 
-Automated Market Maker Contract that allows users to exchange tokens, with
+Smart contract implementing Automated Market Maker Contract that allows users to exchange tokens, with
 an automatically selected exchange rate based on the available liquidity in the
 contract pools.
 

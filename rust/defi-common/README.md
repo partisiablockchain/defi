@@ -12,7 +12,7 @@ Used to create and interact with [MPC20 Token Contracts](https://partisiablockch
 Provides a permission system for who is allowed to interact with a contract. Used for example in `dex-swap-factory`, to specify who can change deployed swap contracts.
 
 ### Token Balances
-Provides a data structure for tracking pairwise token balances. Does not actually store the balances. Used for example by `liquidity-swap` to keep track of swap balances internally, while the actualy tokens are at their respective contracts.
+Provides a data structure for tracking pairwise token balances. Does not actually store the balances. Used for example by `liquidity-swap` to keep track of swap balances internally, while the actually tokens are at their respective contracts.
 
 
 ### Math

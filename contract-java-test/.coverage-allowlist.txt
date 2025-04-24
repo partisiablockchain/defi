@@ -4,3 +4,4 @@ builds/partisiablockchain/language/contracts/defi/rust/zk-liquidity-swap/src/con
 builds/partisiablockchain/language/contracts/defi/rust/zk-order-matching/src/contract.rs        # REAL coverage not supported
 builds/partisiablockchain/language/contracts/defi/rust/zk-order-matching/src/zk_compute.rs      # REAL coverage not supported
 builds/partisiablockchain/language/contracts/defi/rust/zk-deposit/src/zk_compute.rs             # REAL coverage not supported
+builds/partisiablockchain/language/contracts/defi/rust/liquid-staking/src/upgrade.rs            # junit does not support coverage for the upgrade logic
