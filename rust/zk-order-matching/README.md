@@ -1,12 +1,12 @@
 # ZK Order Matching
 
-Order matching contract using secret-sharing to hide orders until a match have
+Smart contract implementing Order matching contract using secret-sharing to hide orders until a match have
 been found.
 
 Operates a similar deposit mechanism to liquidity swap, requiring
 users to deposit some amount of tokens before being able to place orders.
 
-User flow:
+## Usage
 
 - [`deposit`]: Deposit some amount of tokens.
 - [`place_order`]: Place a secret-shared order. The order will be appended to
@@ -42,7 +42,7 @@ with this order:
 - Withdraws are communicated to the token contracts.
 - Orders by users without balances are quickly ignored.
 - Cancelling orders waits for the completion of the current computation.
-- Whenever orders are compatible we can guarentee that the users have enough
+- Whenever orders are compatible we can guarantee that the users have enough
   deposit to execute them.
 - When two orders are compatible, they are matched, and executed.
 

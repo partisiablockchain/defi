@@ -21,21 +21,21 @@ const STATE_APPROVED: u8 = 2;
 ///
 /// ### Fields:
 ///
-///   * `sender`: [`Address`], the sender of the tokens
+///   * `sender`: The sender of the tokens
 ///
-///   * `receiver`: [`Address`], the receiver of tokens following approval of the condition.
+///   * `receiver`: The receiver of tokens following approval of the condition.
 ///
-///   * `approver`: [`Address`], the approver that can signal fulfilment of the condition.
+///   * `approver`: The approver that can signal fulfilment of the condition.
 ///
-///   * `token_type`: [`Address`], the address of the token used in the contract.
+///   * `token_type`: The address of the token used in the contract.
 ///
-///   * `balance`: [`u128`], the amount of tokens currently in the contract.
+///   * `balance`: The amount of tokens currently in the contract.
 ///
-///   * `start_time_millis`: [`i64`], the start time of the contract milliseconds.
+///   * `start_time_millis`: The start time of the contract milliseconds.
 ///
-///   * `end_time_millis`: [`i64`], the dead line of the contract in milliseconds.
+///   * `end_time_millis`: The dead line of the contract in milliseconds.
 ///
-///   * `status`: [`u8`], the current status of the contract.
+///   * `status`: The current status of the contract.
 ///
 #[state]
 pub struct ContractState {
@@ -53,19 +53,19 @@ pub struct ContractState {
 ///
 /// ### Parameters
 ///
-///   * `context`: [`ContractContext`] - the contract context containing sender and chain information.
+///   * `context`: The contract context containing sender and chain information.
 ///
-///   * `receiver`: [`Address`] - the receiver of tokens following approval of the condition.
+///   * `receiver`: The receiver of tokens following approval of the condition.
 ///
-///   * `approver`: [`Address`], the approver that can signal fulfilment of the condition.
+///   * `approver`: The approver that can signal fulfilment of the condition.
 ///
-///   * `token_type`: [`Address`], the address of the token used in the contract.
+///   * `token_type`: The address of the token used in the contract.
 ///
-///   * `hours_until_deadline`: [`u32`], the number of hours until the deadline gets passed.
+///   * `hours_until_deadline`: The number of hours until the deadline gets passed.
 ///
 /// ### Returns
 ///
-/// The new state object of type [`ContractState`] with the initial state being `STATE_CREATED`.
+/// The new state object with the initial state being `STATE_CREATED`.
 ///
 #[init]
 pub fn initialize(
@@ -101,15 +101,15 @@ pub fn initialize(
 ///
 /// ### Parameters:
 ///
-/// * `context`: [`ContractContext`], the context for the action call.
+/// * `context`: The context for the action call.
 ///
-/// * `state`: [`ContractState`], the current state of the contract.
+/// * `state`: The current state of the contract.
 ///
-/// * `amount`: [`u128`], the amount of tokens to deposit
+/// * `amount`: The amount of tokens to deposit
 ///
 /// ### Returns
 ///
-/// The unchanged state object of type [`ContractState`] and the event group containing the
+/// The unchanged state object and the event group containing the
 /// transfer event and the callback event.
 ///
 #[action(shortname = 0x01)]
@@ -145,19 +145,19 @@ pub fn deposit(
 }
 
 /// Callback for depositing tokens. If the transfer was successful the status of the contract
-/// is updated to `STATE_AWAITING_APPROVAL`. Otherwise the callback panics.
+/// is updated to `STATE_AWAITING_APPROVAL`. Otherwise, the callback panics.
 ///
 /// ### Parameters:
 ///
-/// * `ctx`: [`ContractContext`], the contractContext for the callback.
+/// * `ctx`: The contractContext for the callback.
 ///
-/// * `callback_ctx`: [`CallbackContext`], the callbackContext.
+/// * `callback_ctx`: The callbackContext.
 ///
-/// * `state`: [`ContractState`], the current state of the contract.
+/// * `state`: The current state of the contract.
 ///
 /// ### Returns
 ///
-/// The new state object of type [`ContractState`].
+/// The new state object.
 ///
 #[callback(shortname = 0x02)]
 pub fn deposit_callback(
@@ -177,17 +177,17 @@ pub fn deposit_callback(
 
 /// Action for signalling fulfilment of the condition. Panics if the deadline of the
 /// contract has been passed, if the caller is not the correct `approver` or if the contract is
-/// not in state `STATE_AWAITING_APPROVAL`. Otherwise updates the status of the contract to `STATE_APPROVED`.
+/// not in state `STATE_AWAITING_APPROVAL`. Otherwise, updates the status of the contract to `STATE_APPROVED`.
 ///
 /// ### Parameters:
 ///
-/// * `context`: [`ContractContext`], the contractContext for the action.
+/// * `context`: The contractContext for the action.
 ///
-/// * `state`: [`ContractState`], the current state of the contract.
+/// * `state`: The current state of the contract.
 ///
 /// ### Returns
 ///
-/// The new state object of type [`ContractState`].
+/// The new state object.
 ///
 #[action(shortname = 0x03)]
 pub fn approve(context: ContractContext, state: ContractState) -> (ContractState, Vec<EventGroup>) {
@@ -216,13 +216,13 @@ pub fn approve(context: ContractContext, state: ContractState) -> (ContractState
 ///
 /// ### Parameters:
 ///
-/// * `context`: [`ContractContext`], the context for the action call.
+/// * `context`: The context for the action call.
 ///
-/// * `state`: [`ContractState`], the current state of the contract.
+/// * `state`: The current state of the contract.
 ///
 /// ### Returns
 ///
-/// The new state object of type [`ContractState`] and an event group possibly containing a
+/// The new state object and an event group possibly containing a
 /// transfer event.
 ///
 #[action(shortname = 0x04)]

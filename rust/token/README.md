@@ -1,15 +1,15 @@
-# MPC-20 Token Contract
+# MPC-20 Token v1
 
-Standard [MPC-20-v1 token
+Smart contract implementing standard [MPC-20-v1 token
 contract](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-20-token-contract.html),
 that provides the standard methods ([`transfer`], [`transfer_from`]), and a few
 extensions ([`bulk_transfer`], [`approve_relative`]).
 
 The total supply is initialized with the contract, is assigned to the
-initializing user, and remains constant afterwards. Burns are not explicitly
+initializing user, and remains constant afterward. Burns are not explicitly
 supported.
 
-**This contract uses an inefficient storage system, and have been superceeded by
+**Uses an inefficient storage system, and have been superseded by
 the `token-v2` contract; prefer that instead.**
 
 ## Background

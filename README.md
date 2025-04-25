@@ -4,8 +4,8 @@
 
 # DeFi: Smart Contracts for Decentralized Finance
 
-[Official Repository](https://gitlab.com/partisiablockchain/language/example-contracts)
-| [Rustdoc](https://partisiablockchain.gitlab.io/language/example-contracts/access_control/index.html)
+[Official Repository](https://gitlab.com/partisiablockchain/language/contracts/defi)
+| [Rustdoc](https://partisiablockchain.gitlab.io/language/contracts/defi/defi_common/index.html)
 | [PBC Documentation](https://partisiablockchain.gitlab.io/documentation/)
 
 </div>

@@ -1,6 +1,6 @@
 # Router
 
-Routing contract that utilizes the swap lock functionality of the [Liquidity
+Smart contract that utilizes the swap lock functionality of the [Liquidity
 Swap Lock Contract](../liquidity-swap-lock/README.md) to perform swaps between
 different [Tokens](../token/README.md), that might not have a direct swap
 contract between them.
@@ -8,8 +8,8 @@ contract between them.
 ## How does it work
 A swap between two tokens, A, D, without a direct swap contract: A -/> D, can be performed if there exist intermediary swaps,
 that connect the two tokens (a swap route): A -> B -> C -> D, by way of swap contracts AB, BC and CD.
-The router contract handles communication with and between the swap contracts of the route,
-and ensures that swaps are performed atomically, i.e. either:
+The router contract handles communication with, and between, the swap contracts of the route.
+It ensures that swaps are performed atomically, i.e. either:
 - The entire A -> B -> C -> D swap happens, taking the user's A tokens and producing D tokens exclusively.
 - No swaps occur, such that the user retains all their A tokens, and gain no other tokens.
 
@@ -97,6 +97,6 @@ If the router is executing multiple routes at the same time, where the same toke
 and deposits fail.
 
 To solve this, we assume that the sum of approval amounts for any immediate
-clashing swaps is less than the maximum possible token amount (TokenAmount::MAX). We can then
+clashing swaps is less than the maximum possible token amount (`TokenAmount::MAX`). We can then
 approve the maximum possible token amount to avoid any failures. This will leave
 trace approvals for the swap contracts, on behalf of the router, at the token contracts.

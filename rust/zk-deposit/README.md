@@ -1,6 +1,6 @@
-# PBC Rust Zk Example: Alternative identity deposit contract
+# ZkDeposit
 
-Deposit smart contract that allows users to transfer token assets to other
+Smart contract that allows users to transfer token assets to other
 users using an alternative secret identity, without knowing the user's
 blockchain identity.
 
@@ -29,7 +29,7 @@ Features:
     sender from knowing the **blockchain identity** of the recipient.
 - User's **blockchain identity** own their deposit balances, and allows them to
   freely read it (by downloading the secret shares). This also allows anybody to
-  download the the full list of blockchain identities from the contract. It is
+  download the full list of blockchain identities from the contract. It is
   not possible to download the recipient identities of a user.
 - Transfers must be approved by a single approver. The approver has the
   responsibility for verifying that transfers are correct, and these transfers
@@ -171,7 +171,7 @@ Attack vectors:
   them when they withdraw money.
 - Differential analysis: An attacker sends tokens in rounds to overlapping
   groups of users. The overlap is a single user, whom can be easily identified,
-  because they are the only user to recieve and withdraw for both rounds.
+  because they are the only user to receive and withdraw for both rounds.
 
 Effective mitigations:
 
@@ -182,7 +182,7 @@ Effective mitigations:
 
 ## Alternatives
 
-This contract is one of several possible secret transfer contracts, and its
+This is one of several possible secret transfer contracts, and its
 transfer operation is of the slower variety.
 
 Consider the possible attributes that can be secret:
@@ -191,7 +191,7 @@ Consider the possible attributes that can be secret:
 - `recipient`: Who is receiving this transfer?
 - `amount`: Amount of tokens sent.
 - `balance`: User's balances.
-- `balance` (existance): Which users have a balance.
+- `balance` (existence): Which users have a balance.
 - transfer success: Whether any given transfer succeeded or not, and thus
   whether the user had enough tokens to transfer the amount.
 

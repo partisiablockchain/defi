@@ -1,19 +1,19 @@
 # NFT v2 (MPC-721-v2)
 
-An example of a NFT (Non-Fungible Token) smart contract for Partisia
+Example of an NFT (Non-Fungible Token) smart contract for Partisia
 Blockchain, implementing the MPC-721-v2 standard.
 
 ## Background, NFT
 
 An NFT is a unique identifier managed by an NFT contract, that can be
-transfered between accounts on the blockchain. NFTs can be used in much the
+transferred between accounts on the blockchain. NFTs can be used in much the
 same way as [MPC-20 tokens](../token-v2) can, but NFTs represent specific
 instances of an object (non-fungible like a physical book; there are many like
 it, but the one sitting on your bookshelf is yours and has a history), whereas
-[tokens](../token-v2) are interchangable (fungible; like money in a bank
+[tokens](../token-v2) are interchangeable (fungible; like money in a bank
 account).
 
-NFTs are often associated with specific artworks, which are publically
+NFTs are often associated with specific artworks, which are publicly
 accessible by a unique link stored in the contract; artwork is rarely stored
 on-chain.
 
@@ -30,7 +30,7 @@ The contract is inspired by the ERC721 NFT contract with extensions for Metadata
 
 ## Extensions
 
-This contract is meant as a jumping off point to making your own NFTs. Here are
+The contract is meant as a jumping off point to making your own NFTs. Here are
 some ideas:
 
 - NFT attributes: Track anything you want! This can include ownership history,
