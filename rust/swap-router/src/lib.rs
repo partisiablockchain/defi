@@ -13,7 +13,7 @@ use create_type_spec_derive::CreateTypeSpec;
 use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use read_write_state_derive::ReadWriteState;
 
-use read_write_rpc_derive::ReadRPC;
+use read_write_rpc_derive::{ReadRPC, WriteRPC};
 
 use defi_common::liquidity_util::{AcquiredLiquidityLockInformation, LiquidityLockId};
 use defi_common::token_balances::TokenAmount;
@@ -80,7 +80,7 @@ struct PendingWithdrawInfo {
 }
 
 /// Information about the swap contracts known by the swap-router.
-#[derive(ReadWriteState, ReadRPC, CreateTypeSpec)]
+#[derive(ReadWriteState, ReadRPC, WriteRPC, CreateTypeSpec)]
 pub struct SwapContractInfo {
     /// The swap contract we have a lock in.
     swap_address: Address,
@@ -359,8 +359,7 @@ pub fn route_swap(
     let total_cost = calculate_min_total_gas_cost(route_length);
 
     transfer_event_builder
-        .with_callback(SHORTNAME_START_LOCK_CHAIN_CALLBACK)
-        .argument(route_id)
+        .with_callback_rpc(start_lock_chain_callback::rpc(route_id))
         .with_cost(total_cost)
         .done();
 
@@ -392,7 +391,7 @@ fn validate_route_and_add_info(
         let swap_info = known_swap_contracts
             .iter()
             .find(|&contract_info| contract_info.swap_address == *swap_address)
-            .unwrap_or_else(|| panic!("Unknown swap address: {:x?}.", swap_address.identifier));
+            .unwrap_or_else(|| panic!("Unknown swap address: {:x?}.", swap_address.identifier()));
 
         let (swap_input_token, swap_output_token) =
             if prev_output_token == swap_info.token_a_address {
@@ -402,8 +401,8 @@ fn validate_route_and_add_info(
             } else {
                 panic!(
                     "No tokens at swap contract {:x?} matches token {:x?}, at swap number {}.",
-                    swap_info.swap_address.identifier,
-                    prev_output_token.identifier,
+                    swap_info.swap_address.identifier(),
+                    prev_output_token.identifier(),
                     i + 1
                 );
             };
@@ -581,8 +580,7 @@ fn approve_callback(
     );
 
     deposit_event_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(route_id)
+        .with_callback_rpc(deposit_callback::rpc(route_id))
         .done();
 
     let events = vec![deposit_event_builder.build()];
@@ -610,8 +608,7 @@ fn deposit_callback(
 
             // Make sure to callback our route withdraw handler.
             execute_event_builder
-                .with_callback(SHORTNAME_RECEIVE_OUTPUT_AMOUNT_CALLBACK)
-                .argument(route_id)
+                .with_callback_rpc(receive_output_amount_callback::rpc(route_id))
                 .done();
 
             // Add a pending withdrawal.
@@ -659,9 +656,7 @@ fn receive_output_amount_callback(
 
     // Callback to execute the next pending lock.
     withdraw_event_builder
-        .with_callback(SHORTNAME_EXECUTE_ROUTE_CALLBACK)
-        .argument(route_id)
-        .argument(received_amount)
+        .with_callback_rpc(execute_route_callback::rpc(route_id, received_amount))
         .done();
 
     let events = vec![withdraw_event_builder.build()];
@@ -723,7 +718,7 @@ fn build_events_cancel_route(event_builder: &mut EventGroupBuilder, route: &Rout
 
     // Create a failing interaction
     event_builder
-        .with_callback(SHORTNAME_COULD_NOT_ACQUIRE_LOCK_ERROR)
+        .with_callback_rpc(could_not_acquire_lock_error::rpc())
         .done();
 }
 
@@ -742,8 +737,7 @@ fn build_acquire_lock_events(
 
     // Recursively call self to update route information.
     event_builder
-        .with_callback(SHORTNAME_LOCK_ROUTE_CALLBACK)
-        .argument(route_id)
+        .with_callback_rpc(lock_route_callback::rpc(route_id))
         .done();
 }
 
@@ -758,9 +752,7 @@ fn build_execute_approve_events(
 
     // Callback to start deposits.
     event_builder
-        .with_callback(SHORTNAME_APPROVE_CALLBACK)
-        .argument(route_id)
-        .argument(approval_amount)
+        .with_callback_rpc(approve_callback::rpc(route_id, approval_amount))
         .done();
 }
 

@@ -10,13 +10,13 @@ use read_write_state_derive::ReadWriteState;
 use std::cmp::min;
 
 /// Address of the public WASM deployment contract.
-const ADDRESS_DEPLOY_PUBLIC: Address = Address {
-    address_type: AddressType::SystemContract,
-    identifier: [
+const ADDRESS_DEPLOY_PUBLIC: Address = Address::from_components(
+    AddressType::SystemContract,
+    [
         0x97, 0xa0, 0xe2, 0x38, 0xe9, 0x24, 0x02, 0x5b, 0xad, 0x14, 0x4a, 0xa0, 0xc4, 0x91, 0x3e,
         0x46, 0x30, 0x8f, 0x9a, 0x4d,
     ],
-};
+);
 
 /// Contract version type. Does not have specific semantics with the exception of being
 /// monotonically increasing.
@@ -107,10 +107,12 @@ pub fn deploy_contract(
         .argument(initialization_rpc)
         .done();
 
-    Address {
-        address_type: AddressType::PublicContract,
-        identifier: ctx.original_transaction.bytes[12..32].try_into().unwrap(),
-    }
+    Address::from_components(
+        AddressType::PublicContract,
+        ctx.original_transaction.as_ref()[12..32]
+            .try_into()
+            .unwrap(),
+    )
 }
 
 /// Adds invocation for deploying a contract with some initializable data against a specific binder id.
@@ -141,8 +143,10 @@ pub fn deploy_contract_specific_binder(
         .argument(binder_id)
         .done();
 
-    Address {
-        address_type: AddressType::PublicContract,
-        identifier: ctx.original_transaction.bytes[12..32].try_into().unwrap(),
-    }
+    Address::from_components(
+        AddressType::PublicContract,
+        ctx.original_transaction.as_ref()[12..32]
+            .try_into()
+            .unwrap(),
+    )
 }

@@ -157,10 +157,10 @@ pub fn initialize(
     min_increment: u128,
     auction_duration_hours: u32,
 ) -> (NftAuctionContractState, Vec<EventGroup>) {
-    if nft_for_sale_address.address_type != AddressType::PublicContract {
+    if nft_for_sale_address.address_type() != AddressType::PublicContract {
         panic!("Tried to create a contract selling a non publicContract NFT");
     }
-    if token_for_bidding.address_type != AddressType::PublicContract {
+    if token_for_bidding.address_type() != AddressType::PublicContract {
         panic!("Tried to create a contract buying a non publicContract token");
     }
     let duration_millis = i64::from(auction_duration_hours) * 60 * 60 * 1000;
@@ -215,7 +215,7 @@ pub fn start(
     // Builder
     let mut event_group = EventGroup::builder();
 
-    event_group.with_callback(SHORTNAME_START_CALLBACK).done();
+    event_group.with_callback_rpc(start_callback::rpc()).done();
 
     event_group
         .call(state.nft_for_sale_address, transfer_from())
@@ -291,10 +291,7 @@ pub fn bid(
         .argument(context.contract_address)
         .argument(bid_amount)
         .done();
-    event_group
-        .with_callback(SHORTNAME_BID_CALLBACK)
-        .argument(bid)
-        .done();
+    event_group.with_callback_rpc(bid_callback::rpc(bid)).done();
     (state, vec![event_group.build()])
 }
 

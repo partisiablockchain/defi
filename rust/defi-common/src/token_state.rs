@@ -23,7 +23,7 @@ pub type TokenAmount = u128;
 /// Different tokens implement different underlying data-structures, but the operations that can be
 /// done on MPC-20 token contracts are
 /// [well-defined](https://partisiablockchain.gitlab.io/documentation/smart-contracts/integration/mpc-20-token-contract.html)
-/// .  This trait allows for easy implementation of the [`transfer`](`AbstractTokenState::transfer`), [`transfer_from`](`AbstractTokenState::transfer_from`) and
+/// .  This trait allows for easy implementation of the [`transfer()`](`AbstractTokenState::transfer`), [`transfer_from()`](`AbstractTokenState::transfer_from`) and
 /// [`update_allowance_relative`](`AbstractTokenState::update_allowance_relative`) operations, for any implementations that provide the following
 /// methods:
 ///

@@ -76,7 +76,7 @@ pub fn initialize(
     token_type: Address,
     hours_until_deadline: u32,
 ) -> ContractState {
-    if token_type.address_type != AddressType::PublicContract {
+    if token_type.address_type() != AddressType::PublicContract {
         panic!("Tried to create a contract selling a non publicContract token");
     }
     let millis_until_deadline = i64::from(hours_until_deadline) * 60 * 60 * 1000;
@@ -136,9 +136,7 @@ pub fn deposit(
         &context.contract_address,
         amount,
     );
-    e.with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(amount)
-        .done();
+    e.with_callback_rpc(deposit_callback::rpc(amount)).done();
     let event_group: EventGroup = e.build();
 
     (state, vec![event_group])

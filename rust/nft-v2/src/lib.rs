@@ -198,7 +198,7 @@ pub fn initialize(
     }
 }
 
-/// User allows another user or contract to [`transfer_from`] their NFT. Each NFT can only have a single approved account.
+/// User allows another user or contract to [`transfer_from()`] their NFT. Each NFT can only have a single approved account.
 ///
 /// Change or reaffirm the approved address for an NFT.
 /// `approved==None` revokes any existing approved address.

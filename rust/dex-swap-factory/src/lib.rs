@@ -18,7 +18,7 @@ use defi_common::math::assert_is_per_mille;
 use defi_common::permission::Permission;
 
 /// Pair of token contract addresses.
-#[derive(ReadRPC, ReadWriteState, CreateTypeSpec)]
+#[derive(ReadRPC, WriteRPC, ReadWriteState, CreateTypeSpec)]
 pub struct TokenPair {
     /// The first token address.
     pub token_a_address: Address,
@@ -27,7 +27,7 @@ pub struct TokenPair {
 }
 
 /// Information about a deployed swap contract.
-#[derive(ReadWriteState, CreateTypeSpec)]
+#[derive(ReadWriteState, WriteRPC, CreateTypeSpec)]
 pub struct SwapContractInfo {
     /// Version of the contract.
     pub contract_version: deploy::ContractVersion,
@@ -168,9 +168,8 @@ pub fn deploy_swap_contract(
     );
 
     event_group
-        .with_callback(SHORTNAME_DEPLOY_SWAP_CONTRACT_CALLBACK)
+        .with_callback_rpc(deploy_swap_contract_callback::rpc(contract_address))
         .with_cost(1000)
-        .argument(contract_address)
         .done();
 
     (state, vec![event_group.build()])
@@ -242,9 +241,8 @@ pub fn deploy_swap_lock_contract(
     );
 
     event_group
-        .with_callback(SHORTNAME_DEPLOY_SWAP_CONTRACT_CALLBACK)
+        .with_callback_rpc(deploy_swap_contract_callback::rpc(contract_address))
         .with_cost(1000)
-        .argument(contract_address)
         .done();
 
     (state, vec![event_group.build()])
@@ -275,8 +273,7 @@ pub fn deploy_swap_contract_callback(
 
     event_group.ping(swap_address, None);
     event_group
-        .with_callback(SHORTNAME_SWAP_CONTRACT_EXISTS_CALLBACK)
-        .argument(swap_address)
+        .with_callback_rpc(swap_contract_exists_callback::rpc(swap_address))
         .done();
 
     (state, vec![event_group.build()])

@@ -143,17 +143,15 @@ pub fn deposit(
     );
 
     event_group_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(tokens.token_in)
-        .argument(amount)
+        .with_callback_rpc(deposit_callback::rpc(tokens.token_in, amount))
         .done();
 
     (state, vec![event_group_builder.build()])
 }
 
-/// Handles callback from [`deposit`]. <br>
+/// Handles callback from [`deposit()`]. <br>
 /// If the transfer event is successful,
-/// the caller of [`deposit`] is registered as a user of the contract with (additional) `amount` added to their balance.
+/// the caller of [`deposit()`] is registered as a user of the contract with (additional) `amount` added to their balance.
 ///
 /// ### Parameters:
 ///
@@ -207,7 +205,7 @@ pub fn place_order(
     );
 
     let input_def = ZkInputDef::with_metadata(
-        Some(SHORTNAME_ORDER_VARIABLE_INPUTTED),
+        Some(order_variable_inputted::SHORTNAME),
         zk_compute::VarMetadata {
             variable_type: zk_compute::VARIABLE_TYPE_ORDER,
             deposit_amount_a: balance.a_tokens,
@@ -247,7 +245,7 @@ pub fn start_next_order_in_queue(
         (Some(next_variable_id), _) => {
             vec![zk_compute::match_order_start(
                 next_variable_id,
-                Some(SHORTNAME_ORDER_MATCH_COMPLETE),
+                Some(order_match_complete::SHORTNAME),
                 &zk_compute::VarMetadata {
                     variable_type: zk_compute::VARIABLE_TYPE_MATCH,
                     deposit_amount_a: 0,
@@ -391,7 +389,7 @@ pub fn withdraw(
 
     if wait_for_callback {
         event_group_builder
-            .with_callback(SHORTNAME_WAIT_WITHDRAW_CALLBACK)
+            .with_callback_rpc(wait_withdraw_callback::rpc())
             .done();
     }
 

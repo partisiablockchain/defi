@@ -118,17 +118,15 @@ pub fn deposit(
     );
 
     event_group_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(tokens.token_in)
-        .argument(amount)
+        .with_callback_rpc(deposit_callback::rpc(tokens.token_in, amount))
         .done();
 
     (state, vec![event_group_builder.build()])
 }
 
-/// Handles callback from [`deposit`]. <br>
+/// Handles callback from [`deposit()`]. <br>
 /// If the transfer event is successful,
-/// the caller of [`deposit`] is registered as a user of the contract with (additional) `amount` added to their balance.
+/// the caller of [`deposit()`] is registered as a user of the contract with (additional) `amount` added to their balance.
 ///
 /// ### Parameters:
 ///
@@ -276,7 +274,7 @@ pub fn withdraw(
 
     if wait_for_callback {
         event_group_builder
-            .with_callback(SHORTNAME_WAIT_WITHDRAW_CALLBACK)
+            .with_callback_rpc(wait_withdraw_callback::rpc())
             .done();
     }
 
@@ -294,7 +292,7 @@ fn wait_withdraw_callback(
 
 /// Become a liquidity provider to the contract by providing `amount` of tokens from the caller's balance. <br>
 /// An equivalent amount of the output token is required to succeed and will be token_in implicitly. <br>
-/// This is the inverse of [`reclaim_liquidity`].
+/// This is the inverse of [`reclaim_liquidity()`].
 ///
 /// ### Parameters:
 ///
@@ -344,7 +342,7 @@ pub fn provide_liquidity(
 }
 
 /// Reclaim a calling user's share of the contract's total liquidity based on `liquidity_token_amount`. <br>
-/// This is the inverse of [`provide_liquidity`].
+/// This is the inverse of [`provide_liquidity()`].
 ///
 /// Liquidity tokens are synonymous to weighted shares of the contract's total liquidity. <br>
 /// As such, we calculate how much to output of token A and B,
@@ -465,7 +463,7 @@ pub fn initial_liquidity_tokens(
     u128_sqrt(token_a_amount * token_b_amount).into()
 }
 
-/// Finds the equivalent value of the output token during [`provide_liquidity`] based on the input amount and the weighted shares that they correspond to. <br>
+/// Finds the equivalent value of the output token during [`provide_liquidity()`] based on the input amount and the weighted shares that they correspond to. <br>
 /// Due to integer rounding, a user may be depositing an additional token and mint one less than expected. <br>
 /// Calculations are derived from section 2.1.2 of [UniSwap v1 whitepaper](https://github.com/runtimeverification/verified-smart-contracts/blob/uniswap/uniswap/x-y-k.pdf)
 ///
@@ -496,7 +494,7 @@ pub fn calculate_equivalent_and_minted_tokens(
     (token_out_equivalent, minted_liquidity_tokens)
 }
 
-/// Calculates the amount of token {A, B} that the input amount of liquidity tokens correspond to during [`reclaim_liquidity`]. <br>
+/// Calculates the amount of token {A, B} that the input amount of liquidity tokens correspond to during [`reclaim_liquidity()`]. <br>
 /// Due to integer rounding, a user may be withdrawing less of each pool token than expected. <br>
 /// Calculations are derived from section 2.2.2 of [UniSwap v1 whitepaper](
 /// https://github.com/runtimeverification/verified-smart-contracts/blob/uniswap/uniswap/x-y-k.pdf)

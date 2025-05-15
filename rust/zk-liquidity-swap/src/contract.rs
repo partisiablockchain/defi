@@ -5,6 +5,10 @@ extern crate pbc_contract_codegen;
 
 use create_type_spec_derive::CreateTypeSpec;
 use defi_common::interact_mpc20::MPC20Contract;
+use defi_common::math::u128_division_ceil;
+use defi_common::token_balances::{
+    DepositToken, TokenAmount, TokenBalance, TokenBalances, TokensInOut,
+};
 use pbc_contract_common::address::Address;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
@@ -14,11 +18,6 @@ use pbc_zk::{Sbi128, Sbi8, SecretBinary};
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 use std::collections::VecDeque;
-
-use defi_common::math::u128_division_ceil;
-use defi_common::token_balances::{
-    DepositToken, TokenAmount, TokenBalance, TokenBalances, TokensInOut,
-};
 
 /**
  * Metadata information associated with each individual variable.
@@ -247,9 +246,7 @@ pub fn deposit(
     );
 
     event_group_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(from_token)
-        .argument(amount)
+        .with_callback_rpc(deposit_callback::rpc(from_token, amount))
         .done();
 
     (state, vec![event_group_builder.build()])
@@ -323,7 +320,7 @@ pub fn swap(
     );
 
     let input_def = ZkInputDef::with_metadata(
-        Some(SHORTNAME_SWAP_VARIABLE_INPUTTED),
+        Some(swap_variable_inputted::SHORTNAME),
         SecretVarMetadata {
             only_if_at_front,
             is_output_variable: false,
@@ -398,7 +395,7 @@ pub fn computation_complete(
 ///
 /// Will:
 ///
-/// 1. Trigger [`execute_swap`]. This is triggered in a separate event in order to provide
+/// 1. Trigger [`execute_swap()`]. This is triggered in a separate event in order to provide
 ///    a separate atomic context for making swaps and failing.
 /// 2. Start the next swap in the [`ContractState::worklist`], if any are present. Should always
 ///    happen, even if the swap turns out to be bad.
@@ -448,7 +445,7 @@ pub fn swap_opened(
     let mut event_group_builder = EventGroup::builder();
     event_group_builder
         .call(context.contract_address, SHORTNAME_ZK_PUBLIC_INVOCATION)
-        .argument(SHORTNAME_EXECUTE_SWAP)
+        .argument(execute_swap::SHORTNAME)
         .argument(swap)
         .done();
 
@@ -481,11 +478,6 @@ pub struct Swap {
  * Shortname to call public invocations of a ZK contract.
  */
 const SHORTNAME_ZK_PUBLIC_INVOCATION: Shortname = Shortname::from_u32(0x09);
-
-/** Shortname of the [`execute_swap`] invocation. Must be called using
- * [`SHORTNAME_ZK_PUBLIC_INVOCATION`].
- */
-const SHORTNAME_EXECUTE_SWAP: Shortname = Shortname::from_u32(0x20);
 
 /// The executor of [`Swap`]s. Can only be called by the contract itself.
 #[action(shortname = 0x20, zk = true)]
@@ -590,7 +582,7 @@ pub fn withdraw(
 
     if wait_for_callback {
         event_group_builder
-            .with_callback(SHORTNAME_WAIT_WITHDRAW_CALLBACK)
+            .with_callback_rpc(wait_withdraw_callback::rpc())
             .done();
     }
 

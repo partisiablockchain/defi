@@ -5,7 +5,7 @@ users using an alternative secret identity, without knowing the user's
 blockchain identity.
 
 The contract can be "attached" to any MPC20-compatible token contract, and can
-then allow users to [`deposit`] their token balances in the token contract,
+then allow users to [`deposit()`] their token balances in the token contract,
 such that they are available in ZkDeposit.
 
 ## Features
@@ -59,25 +59,25 @@ without surveillance (at least from the NGO.)
 The basic flows is:
 
 1. Recipients (and sender) register using [`create_account`].
-2. Sender [`deposit`] some tokens.
+2. Sender [`deposit()`] some tokens.
 3. Sender requests the creation of transfers of tokens to the recipients, by using [`request_transfer`].
 4. The approver can inspect the secret-shared transfer.
-5. The approver then [`approve_transfer`], which results in the execution of the transfer.
+5. The approver then [`approve_transfer()`], which results in the execution of the transfer.
    - The transfer updates all balances and produces new balances, which prevents
      anybody other than the recipient from knowing the recipient.
 6. Recipients can inspect the secret-shared account balance.
-7. Recipients can now [`withdraw`] tokens, if they have any.
+7. Recipients can now [`withdraw()`] tokens, if they have any.
 
 Account creation:
 
 1. Users create their blockchain identity and their recipient identity.
-2. User invokes [`create_account`] with their new recipient identity.
+2. User invokes [`create_account()`] with their new recipient identity.
 3. Note that account creation must be done before any other action will succeed. This includes both sender and recipient.
 
 Deposit:
 
 1. `token.approve(deposit, amount)`
-2. [`deposit`].
+2. [`deposit()`].
    - This action cannot be invoked at all before [`create_account`], to prevent tokens getting stuck in the deposit contract.
    - Transaction: `token.transfer_from(user, deposit, amount)`
    - MPC: Increment user balance by `amount`.
@@ -90,14 +90,14 @@ Request transfer:
 
 Approve Transfer:
 
-1. [`approve_transfer`]
+1. [`approve_transfer()`]
    - MPC: Decrement sender balance by `amount`.
    - MPC: Increment receiver balance by `amount`.
 
 Withdraw:
 
-1. [`withdraw`]
-   - This action cannot be invoked at all before [`create_account`]
+1. [`withdraw()`]
+   - This action cannot be invoked at all before [`create_account()`]
    - MPC: Decrement user balance by `amount`.
    - Transaction: `token.transfer(deposit, user, amount)`.
 
@@ -142,15 +142,15 @@ Contract invariants:
 
 ## Performance
 
-- [`create_account`] involves MPC: Linear time with respect to the total number
+- [`create_account()`] involves MPC: Linear time with respect to the total number
   of users. Must iterate over all balances to determine whether the recipient
   id already has a balance. Produces a single new balance.
-- [`deposit`] involves MPC: Constant time. Only need to update the depositing
+- [`deposit()`] involves MPC: Constant time. Only need to update the depositing
   user's balance.
-- [`withdraw`] involves MPC: Constant time. Only need to update the withdrawing
+- [`withdraw()`] involves MPC: Constant time. Only need to update the withdrawing
   user's balance.
-- [`request_transfer`] does not involve MPC.
-- [`approve_transfer`] involves MPC: Linear time with respect to the total
+- [`request_transfer()`] does not involve MPC.
+- [`approve_transfer()`] involves MPC: Linear time with respect to the total
   number of users. Must iterate over all balances to find the recipient
   balance, and to update all balances. Produces a complete set of new balances.
 

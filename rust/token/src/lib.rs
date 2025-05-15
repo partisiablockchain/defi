@@ -14,7 +14,7 @@ use pbc_contract_common::sorted_vec_map::SortedVecMap;
 
 /// MPC-20-v1 token contract compatible state.
 ///
-/// Uses the [`AbstractTokenState`] to implement [`transfer`].
+/// Uses the [`AbstractTokenState`] to implement [`transfer()`].
 #[state]
 pub struct TokenState {
     /// The name of the token - e.g. "MyToken".
@@ -138,7 +138,7 @@ pub fn initialize(
     initial_state
 }
 
-/// Individual transfer for use in [`bulk_transfer`].
+/// Individual transfer for use in [`bulk_transfer()`].
 #[derive(ReadWriteRPC, CreateTypeSpec)]
 pub struct Transfer {
     /// The address to transfer to.
