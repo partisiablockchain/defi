@@ -30,7 +30,7 @@ pub struct AllowedAddress {
 
 /// MPC-20 compatible state for the liquid token.
 ///
-/// Uses the [`AbstractTokenState`] to implement [`transfer`].
+/// Uses the [`AbstractTokenState`] to implement [`transfer()`].
 #[derive(ReadWriteState, CreateTypeSpec)]
 pub struct LiquidTokenState {
     /// Liquid token balances for the accounts associated with the contract.
@@ -718,14 +718,13 @@ pub fn submit(
         stake_token_amount,
     );
     event_group
-        .with_callback(SHORTNAME_SUBMIT_CALLBACK)
-        .argument(stake_token_amount)
+        .with_callback_rpc(submit_callback::rpc(stake_token_amount))
         .with_cost(600)
         .done();
     (state, vec![event_group.build()])
 }
 
-/// Handles callback from [`submit`]. <br>
+/// Handles callback from [`submit()`]. <br>
 ///
 /// # Parameters:
 ///
@@ -889,15 +888,14 @@ pub fn deposit(
         stake_token_amount,
     );
     event_group
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(stake_token_amount)
+        .with_callback_rpc(deposit_callback::rpc(stake_token_amount))
         .with_cost(600)
         .done();
 
     (state, vec![event_group.build()])
 }
 
-/// Handles callback from [`deposit`]. <br>
+/// Handles callback from [`deposit()`]. <br>
 ///
 /// # Parameters:
 ///

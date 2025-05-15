@@ -251,17 +251,15 @@ pub fn deposit(
     );
 
     event_group_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(tokens.token_in)
-        .argument(amount)
+        .with_callback_rpc(deposit_callback::rpc(tokens.token_in, amount))
         .done();
 
     (state, vec![event_group_builder.build()])
 }
 
-/// Handles callback from [`deposit`]. <br>
+/// Handles callback from [`deposit()`]. <br>
 /// If the transfer event is successful,
-/// the caller of [`deposit`] is registered as a user of the contract with (additional) `amount` added to their balance.
+/// the caller of [`deposit()`] is registered as a user of the contract with (additional) `amount` added to their balance.
 ///
 /// ### Parameters:
 ///
@@ -388,7 +386,7 @@ pub fn withdraw(
 
     if wait_for_callback {
         event_group_builder
-            .with_callback(SHORTNAME_WAIT_WITHDRAW_CALLBACK)
+            .with_callback_rpc(wait_withdraw_callback::rpc())
             .done();
     }
 
@@ -406,7 +404,7 @@ fn wait_withdraw_callback(
 
 /// Become a liquidity provider to the contract by providing `amount` of tokens from the caller's balance. <br>
 /// An equivalent amount of the output token is required to succeed and will be token_in implicitly. <br>
-/// This is the inverse of [`reclaim_liquidity`].
+/// This is the inverse of [`reclaim_liquidity()`].
 ///
 /// ### Parameters:
 ///
@@ -461,7 +459,7 @@ pub fn provide_liquidity(
 }
 
 /// Reclaim a calling user's share of the contract's total liquidity based on `liquidity_token_amount`. <br>
-/// This is the inverse of [`provide_liquidity`].
+/// This is the inverse of [`provide_liquidity()`].
 ///
 /// Liquidity tokens are synonymous to weighted shares of the contract's total liquidity. <br>
 /// As such, we calculate how much to output of token A and B,
@@ -617,14 +615,11 @@ pub fn acquire_swap_lock(
     );
 
     // Pass the lock id to any callbacks.
-    let mut event_group_builder = EventGroup::builder();
     let lock_info = AcquiredLiquidityLockInformation {
         lock_id,
         amount_out,
     };
-    event_group_builder.return_data(lock_info);
-
-    (state, vec![event_group_builder.build()])
+    (state, vec![EventGroup::with_return_data(lock_info)])
 }
 
 /// Calculates the received amount of the outgoing swap token, if swapping `amount_in` of `token_in`,
@@ -677,11 +672,7 @@ pub fn execute_lock_swap(
     lock_id: LiquidityLockId,
 ) -> (LiquiditySwapContractState, Vec<EventGroup>) {
     let output_amount = execute_lock_swap_internal(&mut state, lock_id, context.sender);
-
-    let mut return_event = EventGroup::builder();
-    return_event.return_data(output_amount);
-
-    (state, vec![return_event.build()])
+    (state, vec![EventGroup::with_return_data(output_amount)])
 }
 
 /// Removes the lock associated with `lock_id` from the internal state and executes the corresponding swap,
@@ -772,7 +763,7 @@ fn calculate_swap_to_amount_accounting_for_locks(
     )
 }
 
-/// Finds the equivalent value of the output token during [`provide_liquidity`] based on the input amount and the weighted shares that they correspond to. <br>
+/// Finds the equivalent value of the output token during [`provide_liquidity()`] based on the input amount and the weighted shares that they correspond to. <br>
 /// Due to integer rounding, a user may be depositing an additional token and mint one less than expected. <br>
 /// Calculations are derived from section 2.1.2 of [UniSwap v1 whitepaper](https://github.com/runtimeverification/verified-smart-contracts/blob/uniswap/uniswap/x-y-k.pdf)
 ///
@@ -803,7 +794,7 @@ fn calculate_equivalent_and_minted_tokens(
     (token_out_equivalent, minted_liquidity_tokens)
 }
 
-/// Calculates the amount of token {A, B} that the input amount of liquidity tokens correspond to during [`reclaim_liquidity`]. <br>
+/// Calculates the amount of token {A, B} that the input amount of liquidity tokens correspond to during [`reclaim_liquidity()`]. <br>
 /// Due to integer rounding, a user may be withdrawing less of each pool token than expected. <br>
 /// Calculations are derived from section 2.2.2 of [UniSwap v1 whitepaper](
 /// https://github.com/runtimeverification/verified-smart-contracts/blob/uniswap/uniswap/x-y-k.pdf)

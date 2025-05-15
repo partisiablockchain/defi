@@ -8,13 +8,13 @@ users to deposit some amount of tokens before being able to place orders.
 
 ## Usage
 
-- [`deposit`]: Deposit some amount of tokens.
+- [`deposit()`]: Deposit some amount of tokens.
 - [`place_order`]: Place a secret-shared order. The order will be appended to
   the worklist.
 - At some point the worklist will reach the order, after which it will be
   attempted matched. If no matches were available, it will remain in the state.
 - If anyone inputs a matching order at some point it will be resolved.
-- [`withdraw`]: Withdraw tokens from the order-matching contract.
+- [`withdraw()`]: Withdraw tokens from the order-matching contract.
 
 ## Order matching algorithm
 

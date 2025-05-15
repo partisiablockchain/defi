@@ -286,8 +286,7 @@ pub fn escrow(
         amount,
     );
     event_builder
-        .with_callback(SHORTNAME_ESCROW_CALLBACK)
-        .argument(amount)
+        .with_callback_rpc(escrow_callback::rpc(amount))
         .done();
 
     let events = event_builder.build();
@@ -412,9 +411,7 @@ pub fn execute(
                     *amount,
                 );
                 event_builder
-                    .with_callback(SHORTNAME_TRANSFER_CALLBACK)
-                    .argument(proposal_id)
-                    .argument(*amount)
+                    .with_callback_rpc(transfer_callback::rpc(proposal_id, *amount))
                     .done();
             }
             ProposalType::NewCriteria { ref new_criteria } => {

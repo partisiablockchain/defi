@@ -50,8 +50,8 @@ impl Permission {
         assert!(
             self.does_address_have_permission(addr),
             "Address {:?} {:x?} did not have permission \"{}\"",
-            addr.address_type,
-            addr.identifier,
+            addr.address_type(),
+            addr.identifier(),
             permission_name
         );
     }

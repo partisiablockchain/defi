@@ -8,10 +8,10 @@ with the factory, and allows for the creation of new contracts between pairs.
 
 ## Usage:
 
-- [`deploy_swap_contract`]: Creates a new swap contract between two tokens ([`TokenPair`]), and adds it to [the directory](SwapFactoryState::swap_contracts).
-- [`update_swap_binary`]: Replaces the [contract binary](SwapFactoryState::swap_contract_binary) with a new version.
+- [`deploy_swap_contract()`]: Creates a new swap contract between two tokens ([`TokenPair`]), and adds it to [the directory](SwapFactoryState::swap_contracts).
+- [`update_swap_binary()`]: Replaces the [contract binary](SwapFactoryState::swap_contract_binary) with a new version.
   Does not automatically update deployed contracts.
-- [`delist_swap_contract`]: Removes given contracts from [Swap Directory](SwapFactoryState::swap_contracts).
+- [`delist_swap_contract()`]: Removes given contracts from [Swap Directory](SwapFactoryState::swap_contracts).
 
 The [Swap Directory](SwapFactoryState::swap_contracts) can be used to determine
 which swap contracts the directory maintainers are confident in, but it does

@@ -149,10 +149,10 @@ impl TokenBalances {
         token_a_address: Address,
         token_b_address: Address,
     ) -> Result<Self, &'static str> {
-        if token_a_address.address_type == AddressType::Account {
+        if token_a_address.address_type() == AddressType::Account {
             return Result::Err("DepositToken address A must be a contract address");
         }
-        if token_b_address.address_type == AddressType::Account {
+        if token_b_address.address_type() == AddressType::Account {
             return Result::Err("DepositToken address B must be a contract address");
         }
         if token_a_address == token_b_address {

@@ -17,11 +17,11 @@ When performing a swap, a fee of 0.3% is applied, based on the input amount, whi
 This effectively increases `k` after each swap.
 
 In order to perform a swap, it is a prerequisite that the swapping user has already transferred
-at least one of the tokens to the contract via a call to [`deposit`].
+at least one of the tokens to the contract via a call to [`deposit()`].
 
-Additionally, some user (typically the creator of the contract) must have already deposited an amount of both token types and initialized both pools by a call to [`provide_initial_liquidity`].
+Additionally, some user (typically the creator of the contract) must have already deposited an amount of both token types and initialized both pools by a call to [`provide_initial_liquidity()`].
 
-A user may [`withdraw`] the resulting tokens of a swap (or simply his own deposited tokens)
+A user may [`withdraw()`] the resulting tokens of a swap (or simply his own deposited tokens)
 to have the tokens transferred to his account, at any point.
 
 Finally, a user may choose to become a liquidity provider (LP) of the contract

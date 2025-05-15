@@ -120,17 +120,17 @@ pub struct TransferData {
 /// Indicates the type of the item in the work list.
 #[derive(ReadWriteState, Debug, Clone, CreateTypeSpec)]
 pub enum WorkListItem {
-    /// Originally created by [`request_transfer`] invocation, subsequently approved by [`approve_transfer`] invocation.
+    /// Originally created by [`request_transfer`] invocation, subsequently approved by [`approve_transfer()`] invocation.
     #[discriminant(1)]
     PendingTransfer {
         /// Transfer data.
         transfer: TransferData,
     },
 
-    /// Created by the [`deposit`] invocation.
+    /// Created by the [`deposit()`] invocation.
     ///
     /// Invariant: The `account` user will have an account in the contract, as it is
-    /// checked by [`deposit`] invocation.
+    /// checked by [`deposit()`] invocation.
     #[discriminant(2)]
     PendingDeposit {
         /// Account to deposit to
@@ -139,7 +139,7 @@ pub enum WorkListItem {
         amount: TokenAmount,
     },
 
-    /// Created by the [`withdraw`] invocation.
+    /// Created by the [`withdraw()`] invocation.
     #[discriminant(3)]
     PendingWithdraw {
         /// Account to withdraw from, and to eventually transfer tokens to.
@@ -245,7 +245,7 @@ impl ContractState {
 
                 zk_state_change.push(zk_compute::create_account_start(
                     account_creation_id,
-                    Some(SHORTNAME_SIMPLE_WORK_ITEM_COMPLETE),
+                    Some(simple_work_item_complete::SHORTNAME),
                     &VariableKind::DepositBalance { owner: account },
                 ))
             }
@@ -259,7 +259,7 @@ impl ContractState {
                 zk_state_change.push(zk_compute::deposit_start(
                     recipient_balance_variable_id,
                     amount,
-                    Some(SHORTNAME_SIMPLE_WORK_ITEM_COMPLETE),
+                    Some(simple_work_item_complete::SHORTNAME),
                     &VariableKind::DepositBalance { owner: account },
                 ))
             }
@@ -284,7 +284,7 @@ impl ContractState {
                 zk_state_change.push(zk_compute::withdraw_start(
                     recipient_balance_variable_id,
                     amount,
-                    Some(SHORTNAME_WITHDRAW_COMPLETE),
+                    Some(withdraw_complete::SHORTNAME),
                     [
                         &VariableKind::DepositBalance { owner: account },
                         &VariableKind::WorkResult { owner: account },
@@ -334,7 +334,7 @@ impl ContractState {
                     ShortnameZkComputation::from_u32(0x60),
                     output_variable_metadata,
                     vec![sender_balance_variable_id, transfer_data_id],
-                    Some(SHORTNAME_SIMPLE_WORK_ITEM_COMPLETE),
+                    Some(simple_work_item_complete::SHORTNAME),
                 ))
             }
         };
@@ -431,7 +431,7 @@ pub fn initialize(
 
 /// Create a pending transfer from the transaction sender to a secret recipient with a secret amount.
 ///
-/// Transfer must be approved by the approver by calling [`approve_transfer`]. Once approved, the
+/// Transfer must be approved by the approver by calling [`approve_transfer()`]. Once approved, the
 /// transfer will be made through MPC, and be completed async.
 #[zk_on_secret_input(shortname = 0x4A)]
 pub fn request_transfer(
@@ -444,7 +444,7 @@ pub fn request_transfer(
     ZkInputDef<VariableKind, zk_compute::PendingTransferSecrets>,
 ) {
     let input_def = ZkInputDef::with_metadata(
-        Some(SHORTNAME_TRANSFER_REQUEST_INPUTTED),
+        Some(transfer_request_inputted::SHORTNAME),
         VariableKind::WorkItemData {
             owner: state.transfer_approver,
         },
@@ -538,7 +538,7 @@ pub fn create_account(
     ZkInputDef<VariableKind, zk_compute::AccountCreationSecrets>,
 ) {
     let input_def = ZkInputDef::with_metadata(
-        Some(SHORTNAME_CREATE_ACCOUNT_INPUTTED),
+        Some(create_account_inputted::SHORTNAME),
         VariableKind::WorkItemData {
             owner: context.sender,
         },
@@ -602,18 +602,16 @@ pub fn deposit(
     );
 
     event_group_builder
-        .with_callback(SHORTNAME_DEPOSIT_CALLBACK)
-        .argument(context.sender)
-        .argument(amount)
+        .with_callback_rpc(deposit_callback::rpc(context.sender, amount))
         .done();
 
     (state, vec![event_group_builder.build()])
 }
 
-/// Handles callback from [`deposit`].
+/// Handles callback from [`deposit()`].
 ///
 /// If the transfer event is successful,
-/// the caller of [`deposit`] is registered as a user of the contract with (additional) `amount` added to their balance.
+/// the caller of [`deposit()`] is registered as a user of the contract with (additional) `amount` added to their balance.
 #[callback(shortname = 0x10, zk = true)]
 pub fn deposit_callback(
     context: ContractContext,
@@ -771,7 +769,7 @@ pub fn withdraw_complete(
 
 /// Will check the opened result to determine whether the withdraw succeeded or not.
 ///
-/// Triggered by [`withdraw_complete`].
+/// Triggered by [`withdraw_complete()`].
 #[zk_on_variables_opened]
 pub fn withdraw_result_opened(
     context: ContractContext,
@@ -848,12 +846,10 @@ pub fn fail_safely(
     event_groups: &mut Vec<EventGroup>,
     error_message: &str,
 ) {
-    const SHORTNAME_FAIL_IN_SEPARATE_ACTION: u8 = 0x4C;
-
     let mut event_group_builder = EventGroup::builder();
     event_group_builder
         .call(context.contract_address, Shortname::from_u32(0x09)) // Public invocation prefix
-        .argument(SHORTNAME_FAIL_IN_SEPARATE_ACTION) // Shortname
+        .argument(fail_in_separate_action::SHORTNAME) // Shortname
         .argument(String::from(error_message)) // Error message
         .done();
 
