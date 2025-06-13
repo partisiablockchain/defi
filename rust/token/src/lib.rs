@@ -20,15 +20,15 @@ pub struct TokenState {
     /// The name of the token - e.g. "MyToken".
     pub name: String,
     /// The symbol of the token. E.g. "HIX".
-    pub decimals: u8,
+    pub symbol: String,
     /// The number of decimals the token uses - e.g. 8,
     /// means to divide the token amount by `100000000` to get its user representation.
-    pub symbol: String,
+    pub decimals: u8,
     /// The owner of the contract. Not used for anything beyond the initial minting.
     pub owner: Address,
     /// Current amount of tokens for the TokenContract.
     pub total_supply: u128,
-    /// Ledger for the accounts associated with the contract.
+    /// Token balances for the accounts associated with the contract.
     pub balances: SortedVecMap<Address, u128>,
     /// Ledger for allowances, that allows users or contracts to transfer tokens on behalf of
     /// others.
