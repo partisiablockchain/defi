@@ -119,7 +119,7 @@ public abstract class Mpc20ExtensionApproveRelativeTest extends JunitContractTes
    * allowance disappears.
    */
   @Previous("setup")
-  @ParameterizedTest()
+  @ParameterizedTest
   @ValueSource(ints = {0, 1, 12, 50, 100, 921956719})
   void approveRelativeZeroTokens(int delta) {
 

@@ -38,6 +38,7 @@ Contracts:
 - [`mocca`](./rust/mocca): Decentralized Autonomous Organization capable of managing MPC-20 tokens through the use of conditional proposals.
 - [`swap-router`](./rust/swap-router): Routing contract that utilizes the swap lock functionality of the [Liquidity Swap Lock Contract](../liquidity-swap-lock/README.md) to perform swaps between different [Tokens](../token/README.md), that might not have a direct swap contract between them.
 - [`zk-order-matching`](./rust/zk-order-matching): Order matching contract using secret-sharing to hide orders until a match have been found.
+- [`call-option`](./rust/call-option): Call option contract allowing a buyer and seller to agree to exchange tokens in the future at a specified price
 
 Shared libraries:
 
