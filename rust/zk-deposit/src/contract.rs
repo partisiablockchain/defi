@@ -11,7 +11,6 @@ use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
 use pbc_contract_common::shortname::Shortname;
-use pbc_contract_common::shortname::ShortnameZkComputation;
 use pbc_contract_common::zk::{
     CalculationStatus, SecretVarId, ZkClosed, ZkInputDef, ZkState, ZkStateChange,
 };
@@ -243,7 +242,7 @@ impl ContractState {
 
                 self.redundant_variables.push(account_creation_id);
 
-                zk_state_change.push(zk_compute::create_account_start(
+                zk_state_change.push(zk_compute::create_account::start(
                     account_creation_id,
                     Some(simple_work_item_complete::SHORTNAME),
                     &VariableKind::DepositBalance { owner: account },
@@ -256,7 +255,7 @@ impl ContractState {
                     .get_balance_variable_id(&account)
                     .expect("User does not possess an account");
 
-                zk_state_change.push(zk_compute::deposit_start(
+                zk_state_change.push(zk_compute::deposit::start(
                     recipient_balance_variable_id,
                     amount,
                     Some(simple_work_item_complete::SHORTNAME),
@@ -281,7 +280,7 @@ impl ContractState {
                     }
                 };
 
-                zk_state_change.push(zk_compute::withdraw_start(
+                zk_state_change.push(zk_compute::withdraw::start(
                     recipient_balance_variable_id,
                     amount,
                     Some(withdraw_complete::SHORTNAME),
@@ -331,7 +330,7 @@ impl ContractState {
                 self.redundant_variables.push(transfer_data_id);
 
                 zk_state_change.push(ZkStateChange::start_computation_with_inputs(
-                    ShortnameZkComputation::from_u32(0x60),
+                    zk_compute::transfer::SHORTNAME,
                     output_variable_metadata,
                     vec![sender_balance_variable_id, transfer_data_id],
                     Some(simple_work_item_complete::SHORTNAME),

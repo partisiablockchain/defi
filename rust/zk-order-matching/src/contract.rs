@@ -243,7 +243,7 @@ pub fn start_next_order_in_queue(
         (None, _) => vec![],
         (_, 1) => vec![],
         (Some(next_variable_id), _) => {
-            vec![zk_compute::match_order_start(
+            vec![zk_compute::match_order::start(
                 next_variable_id,
                 Some(order_match_complete::SHORTNAME),
                 &zk_compute::VarMetadata {
