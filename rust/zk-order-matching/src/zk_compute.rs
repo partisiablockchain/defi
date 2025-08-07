@@ -1,6 +1,6 @@
 //! Computation file to implement the order matching logic.
 //!
-//! Mainly implemented in [`match_order`], which when given an [`Order`] will check all other
+//! Mainly implemented in [`match_order()`], which when given an [`Order`] will check all other
 //! orders in the system, for any matching using [`is_a_match`], and return a [`Match`] for the
 //! best match.
 use pbc_zk::*;

@@ -1642,8 +1642,8 @@ public abstract class LiquidStakingTest extends JunitContractTest {
    * @param amount The amount of tokens the user receives.
    */
   private void provideFundsToAccount(BlockchainAddress account, int amount) {
-    byte[] transferRpc = Token.transfer(account, BigInteger.valueOf(amount));
-    blockchain.sendAction(stakeTokenOwner, stakeTokenAddress, transferRpc);
+    final byte[] rpc = Token.transfer(account, BigInteger.valueOf(amount));
+    blockchain.sendAction(stakeTokenOwner, stakeTokenAddress, rpc);
   }
 
   /**
@@ -1653,7 +1653,7 @@ public abstract class LiquidStakingTest extends JunitContractTest {
    * @param amount The amount of tokens to be approved.
    */
   private void approveTransferToLiquidStakingContract(BlockchainAddress account, int amount) {
-    byte[] approveRpc = Token.approve(liquidStakingAddress, BigInteger.valueOf(amount));
-    blockchain.sendAction(account, stakeTokenAddress, approveRpc);
+    final byte[] rpc = Token.approve(liquidStakingAddress, BigInteger.valueOf(amount));
+    blockchain.sendAction(account, stakeTokenAddress, rpc);
   }
 }

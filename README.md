@@ -89,6 +89,39 @@ flowchart TD
     style Common stroke:#FFFFFF00,fill:#FFFFFF00
 ```
 
+The [order matching](./rust/double-auction-order-matching) and [token splitter](./rust/prediction-market-token-splitter)
+contracts combined allow for an order matching system on either outcome of an event.
+Here, the MPC20 Token used as the currency token could for example be another token contract.
+
+```mermaid
+flowchart TD
+
+    OrderMatchingFalse["Order Matching
+(False)"]
+FalseToken["MPC20 Token
+(False)"]
+OriginalToken["Underlying MPC20 Token"]
+TokenSplitter["Token Splitter"]
+TrueToken["MPC20 Token
+(True)"]
+OrderMatchingTrue["Order Matching
+(True)"]
+
+
+FalseToken <-- Split/Merge/Redeem --> TokenSplitter
+TrueToken <-- Split/Merge/Redeem --> TokenSplitter
+FalseToken <-- Trade --> OrderMatchingFalse <-- Trade --> OriginalToken
+TokenSplitter <-- Deposit/Withdraw --> OriginalToken
+TrueToken <-- Trade --> OrderMatchingTrue <-- Trade --> OriginalToken
+
+click OriginalToken "./rust/token-v2"
+click TrueToken "./rust/token-v2"
+click FalseToken "./rust/token-v2"
+click OrderMatchingTrue "./rust/double-auction-order-matching"
+click OrderMatchingFalse "./rust/double-auction-order-matching"
+click TokenSplitter "./rust/prediction-market-token-splitter"
+```
+
 ## Usage
 
 All smart contracts can be compiled using the [Cargo Partisia Contract](https://gitlab.com/partisiablockchain/language/cargo-partisia-contract) tool from the `rust` directory:
