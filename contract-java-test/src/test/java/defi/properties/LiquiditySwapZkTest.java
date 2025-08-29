@@ -650,7 +650,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
   }
 
   private ZkLiquiditySwap.ContractState getSwapState() {
-    return new ZkLiquiditySwap(getStateClient(), swapContractAddress).getState();
+    return new ZkLiquiditySwap(getStateClient(), swapContractAddress).getState().openState();
   }
 
   private Token.TokenState getTokenState(BlockchainAddress tokenAddress) {

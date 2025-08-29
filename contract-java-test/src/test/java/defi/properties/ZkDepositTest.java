@@ -719,7 +719,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   }
 
   private int getQueueSize() {
-    final var state = new ZkDeposit(getStateClient(), contractDeposit).getState();
+    final var state = new ZkDeposit(getStateClient(), contractDeposit).getState().openState();
     return state.workQueue().size();
   }
 
@@ -828,7 +828,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
   /** Get the full mapping of deposit balances. */
   private static Map<BlockchainAddress, DepositBalance> getDepositBalances(
       TestZkNode zkNodes, BlockchainStateClient stateClient, BlockchainAddress contractDeposit) {
-    final var state = new ZkDeposit(stateClient, contractDeposit).getState();
+    final var state = new ZkDeposit(stateClient, contractDeposit).getState().openState();
 
     final var balances = state.balances().getNextN(null, 10000);
 
