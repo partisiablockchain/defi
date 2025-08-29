@@ -39,7 +39,8 @@ public final class ZkLiquiditySwapContractTest {
 
     @Override
     protected BigInteger getDepositAmount(BlockchainAddress owner) {
-      final var state = new ZkLiquiditySwap(getStateClient(), contractUnderTestAddress).getState();
+      final var state =
+          new ZkLiquiditySwap(getStateClient(), contractUnderTestAddress).getState().openState();
       final var ownerBalances = state.tokenBalances().balances().get(owner);
       return ownerBalances == null ? BigInteger.ZERO : ownerBalances.aTokens();
     }
