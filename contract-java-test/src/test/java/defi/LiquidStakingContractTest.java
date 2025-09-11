@@ -16,22 +16,72 @@ import org.junit.jupiter.api.Nested;
 
 /** Liquid Staking contract test. */
 public final class LiquidStakingContractTest {
+
+  /** {@link ContractBytes} for the current {@link LiquidStakingContract} contract. */
   static final ContractBytes CONTRACT_BYTES =
       ContractBytes.fromPbcFile(
           Path.of("../rust/target/wasm32-unknown-unknown/release/liquid_staking.pbc"),
           Path.of("../rust/target/wasm32-unknown-unknown/release/liquid_staking_runner"));
 
   /** {@link ContractBytes} for the {@link Token} contract. */
-  public static final ContractBytes TOKEN_CONTRACT_BYTES =
-      ContractBytes.fromPbcFile(
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token.pbc"),
-          Path.of("../rust/target/wasm32-unknown-unknown/release/token_runner"));
+  public static final ContractBytes TOKEN_CONTRACT_BYTES = TokenContractTest.CONTRACT_BYTES;
 
   @Nested
   final class LiquidStakingContract extends LiquidStakingTest {
     LiquidStakingContract() {
       super(CONTRACT_BYTES, TOKEN_CONTRACT_BYTES);
     }
+  }
+
+  /**
+   * Deploy a {@link LiquidStaking} contract along with its underlying {@link Token} contract.
+   *
+   * @param blockchain the blockchain to deploy to.
+   * @param creator the creator of the contract.
+   * @param tokenName the token name.
+   * @param tokenSymbol the token symbol.
+   * @param decimals the amount of decimals a token can have.
+   * @param initialTokenHolder the account that owns the initial supply of tokens.
+   * @param initialTokenSupply the initial supply of the token.
+   * @return the address for the deployed token contract
+   */
+  public static BlockchainAddress deployAndInitializeLiquidStakingContractWithUnderlyingToken(
+      TestBlockchain blockchain,
+      BlockchainAddress creator,
+      String tokenName,
+      String tokenSymbol,
+      byte decimals,
+      BlockchainAddress initialTokenHolder,
+      BigInteger initialTokenSupply,
+      BigInteger initialStakingSupply,
+      ContractBytes contractBytes) {
+
+    byte[] tokenInitRpc = Token.initialize(tokenName, tokenSymbol, (byte) 8, initialTokenSupply);
+    BlockchainAddress tokenAddress =
+        blockchain.deployContract(initialTokenHolder, TOKEN_CONTRACT_BYTES, tokenInitRpc);
+
+    byte[] initRpc =
+        LiquidStaking.initialize(
+            tokenAddress,
+            creator,
+            creator,
+            100,
+            100,
+            BigInteger.ZERO,
+            tokenName,
+            tokenSymbol,
+            decimals);
+
+    BlockchainAddress liquidStakingAddress =
+        blockchain.deployContract(creator, contractBytes, initRpc);
+
+    byte[] approveRpc = Token.approve(liquidStakingAddress, initialStakingSupply);
+    blockchain.sendAction(initialTokenHolder, tokenAddress, approveRpc);
+
+    byte[] rpc = LiquidStaking.submit(initialStakingSupply);
+    blockchain.sendAction(initialTokenHolder, liquidStakingAddress, rpc);
+
+    return liquidStakingAddress;
   }
 
   @Nested
@@ -50,33 +100,16 @@ public final class LiquidStakingContractTest {
         BlockchainAddress initialTokenHolder,
         BigInteger initialTokenSupply,
         ContractBytes contractBytes) {
-
-      byte[] tokenInitRpc = Token.initialize(tokenName, tokenSymbol, (byte) 8, initialTokenSupply);
-      BlockchainAddress tokenAddress =
-          blockchain.deployContract(initialTokenHolder, TOKEN_CONTRACT_BYTES, tokenInitRpc);
-
-      byte[] initRpc =
-          LiquidStaking.initialize(
-              tokenAddress,
-              creator,
-              creator,
-              100,
-              100,
-              BigInteger.ZERO,
-              tokenName,
-              tokenSymbol,
-              decimals);
-
-      BlockchainAddress liquidStakingAddress =
-          blockchain.deployContract(creator, contractBytes, initRpc);
-
-      byte[] approveRpc = Token.approve(liquidStakingAddress, initialTokenSupply);
-      blockchain.sendAction(initialTokenHolder, tokenAddress, approveRpc);
-
-      byte[] rpc = LiquidStaking.submit(initialTokenSupply);
-      blockchain.sendAction(initialTokenHolder, liquidStakingAddress, rpc);
-
-      return liquidStakingAddress;
+      return deployAndInitializeLiquidStakingContractWithUnderlyingToken(
+          blockchain,
+          creator,
+          tokenName,
+          tokenSymbol,
+          decimals,
+          initialTokenHolder,
+          initialTokenSupply,
+          initialTokenSupply,
+          contractBytes);
     }
 
     @Override

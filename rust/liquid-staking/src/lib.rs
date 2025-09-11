@@ -18,6 +18,12 @@ use pbc_traits::ReadWriteState;
 use read_write_rpc_derive::{ReadRPC, WriteRPC};
 use read_write_state_derive::ReadWriteState;
 
+/// Identifier for [`PendingUnlock`].
+type PendingUnlockId = u32;
+
+/// The initial value for [`PendingUnlockId`] counter.
+const INITIAL_PENDING_UNLOCK_ID: PendingUnlockId = 1;
+
 /// Address pair representing an allowance. Owner allows spender to transfer tokens on behalf of
 /// them.
 #[derive(ReadWriteState, CreateTypeSpec, Eq, Ord, PartialEq, PartialOrd)]
@@ -128,6 +134,8 @@ impl AbstractTokenState for LiquidTokenState {
 /// An unlock request waiting to be redeemed.
 #[derive(ReadRPC, WriteRPC, ReadWriteState, CreateTypeSpec)]
 pub struct PendingUnlock {
+    /// Identifier for the [`PendingUnlock`]. Contract-unique.
+    id: PendingUnlockId,
     /// The amount of liquid tokens to be unlocked.
     liquid_amount: u128,
     /// The amount of stake tokens to be unlocked.
@@ -141,7 +149,7 @@ pub struct PendingUnlock {
 }
 
 impl PendingUnlock {
-    /// A pending unlock is redeemable if current_time is larger than cooldown_ends_at
+    /// A [`PendingUnlock`] is redeemable if current_time is larger than cooldown_ends_at
     /// and smaller than expires_at
     ///
     /// ## Parameters
@@ -150,7 +158,7 @@ impl PendingUnlock {
         self.cooldown_ends_at < current_time && current_time < self.expires_at
     }
 
-    /// A pending unlock is expired, if current_time is larger than expires_at.
+    /// A [`PendingUnlock`] is expired, if current_time is larger than expires_at.
     ///
     /// ## Parameters
     /// * `current_time`: The block production time.
@@ -184,14 +192,14 @@ pub struct LiquidStakingState {
     /// Token state that keeps track of the amount of liquid tokens each user has.
     /// Invariant: The sum of all balances is equal to total_pool_liquid.
     pub liquid_token_state: LiquidTokenState,
-    /// Map that keeps track of all pending unlocks.
+    /// Map that keeps track of all [`PendingUnlock`]s.
     pub pending_unlocks: AvlTreeMap<Address, Vec<PendingUnlock>>,
     /// Map that keeps track of all staking tokens locked by the buy-in.
     /// Invariant: If buy in is disabled, then there are no locked buy in tokens
     pub buy_in_tokens: AvlTreeMap<Address, u128>,
-    /// Number of milliseconds from the unlock request was registered until the pending unlock can be redeemed.
+    /// Number of milliseconds from the unlock request was registered until the [`PendingUnlock`] can be redeemed.
     pub length_of_cooldown_period: u64,
-    /// Number of milliseconds from the pending unlock becomes redeemable until the pending unlock expires.
+    /// Number of milliseconds from the [`PendingUnlock`] becomes redeemable until the [`PendingUnlock`] expires.
     pub length_of_redeem_period: u64,
     /// Amount of buy-in locked stake tokens
     pub amount_of_buy_in_locked_stake_tokens: u128,
@@ -199,6 +207,8 @@ pub struct LiquidStakingState {
     pub buy_in_percentage: u128,
     /// The flag to determine if the buy-in is currently used when submitting.
     pub buy_in_enabled: bool,
+    /// Counter for the next contract-unique [`PendingUnlockId`].
+    pending_unlock_id_counter: PendingUnlockId,
 }
 
 impl LiquidStakingState {
@@ -236,8 +246,8 @@ impl LiquidStakingState {
         account == self.staking_responsible
     }
 
-    /// Determines whether the specified `account` is allowed to clean pending unlocks.
-    fn is_allowed_to_clean_pending_unlocks(&self, account: Address) -> bool {
+    /// Determines whether the specified `account` is allowed to clean [`PendingUnlock`]s.
+    fn is_allowed_to_clean_up_pending_unlocks(&self, account: Address) -> bool {
         self.is_the_administrator(account) || self.is_the_staking_responsible(account)
     }
 
@@ -354,7 +364,7 @@ impl LiquidStakingState {
         self.subtract_liquid_tokens_from_user_balance_and_pool(user, liquid_amount);
     }
 
-    /// Adding an unlock request to pending unlocks, if the contract and
+    /// Adding an unlock request to [`PendingUnlock`]s, if the contract and
     /// the specified user has enough liquidity.
     ///
     /// ## Parameters
@@ -365,12 +375,15 @@ impl LiquidStakingState {
         self.assert_whether_user_have_enough_liquidity(user, liquid_amount, created_at);
 
         let new_pending_unlock = PendingUnlock {
+            id: self.pending_unlock_id_counter,
             liquid_amount,
             stake_token_amount: self.exchange_liquidity_tokens_for_stake_tokens(liquid_amount),
             created_at,
             cooldown_ends_at: created_at + self.length_of_cooldown_period,
             expires_at: created_at + self.length_of_cooldown_period + self.length_of_redeem_period,
         };
+
+        self.pending_unlock_id_counter += 1;
 
         let mut unlocks = self.pending_unlocks.get(&user).unwrap_or_default();
         unlocks.push(new_pending_unlock);
@@ -401,12 +414,12 @@ impl LiquidStakingState {
         }
     }
 
-    /// Overwrite the list of pending unlocks for the specified user.
+    /// Overwrite the list of [`PendingUnlock`]s for the specified user.
     /// If the new list is empty, then remove the user from the pending_unlocks map.
     ///
     /// ## Parameters
     /// * `user`: The user who requests to unlock.
-    /// * `new_pending_unlocks`: The list of pending unlocks for the user.
+    /// * `new_pending_unlocks`: The list of [`PendingUnlock`]s for the user.
     fn replace_pending_unlocks(&mut self, user: Address, new_pending_unlocks: Vec<PendingUnlock>) {
         if new_pending_unlocks.is_empty() {
             self.pending_unlocks.remove(&user)
@@ -415,7 +428,7 @@ impl LiquidStakingState {
         }
     }
 
-    /// Removes all expired pending unlocks
+    /// Removes all expired [`PendingUnlock`]s
     ///
     /// ## Parameters
     /// * `current_time`: The block production time, when the clean up was requested.
@@ -426,7 +439,27 @@ impl LiquidStakingState {
         }
     }
 
-    /// Calculate the sum of all liquid tokens in the (non-expired) pending unlocks for the specified user.
+    /// Remove [`PendingUnlock`] for the calling user.
+    ///
+    /// ## Parameters
+    /// * `user`: The user who requests to cancel the unlock.
+    /// * `pending_unlock_id`: The identifier of the [`PendingUnlock`].
+    fn remove_pending_unlock(&mut self, user: Address, pending_unlock_id: PendingUnlockId) {
+        let mut user_pending_unlocks = self
+            .pending_unlocks
+            .get(&user)
+            .expect("User does not possess any pending unlocks");
+        let original_len = user_pending_unlocks.len();
+        user_pending_unlocks.retain(|x| x.id != pending_unlock_id);
+        assert_ne!(
+            original_len,
+            user_pending_unlocks.len(),
+            "User does not possess pending unlock with id: {pending_unlock_id}"
+        );
+        self.replace_pending_unlocks(user, user_pending_unlocks);
+    }
+
+    /// Calculate the sum of all liquid tokens in the (non-expired) [`PendingUnlock`]s for the specified user.
     ///
     /// ## Parameters
     /// * `user`: The user who requests to unlock.
@@ -450,7 +483,7 @@ impl LiquidStakingState {
         }
     }
 
-    /// Redeem all redeemable pending unlocks for the specified user.
+    /// Redeem all redeemable [`PendingUnlock`]s for the specified user.
     ///
     /// ## Parameters
     /// * `user`: The user wants to redeem all his redeemable tokens.
@@ -563,8 +596,8 @@ impl LiquidStakingState {
 /// * `token_for_staking`: the address of the token used for liquid staking.
 /// * `staking_responsible`: the address of the account responsible for staking.
 /// * `administrator`: the address of the account responsible administrative tasks.
-/// * `length_of_cooldown_period`: Number of milliseconds (ms) from the unlock request was registered until the pending unlock can be redeemed.
-/// * `length_of_redeem_period`: Number of milliseconds (ms) from the pending unlock becomes redeemable until the pending unlock expires.
+/// * `length_of_cooldown_period`: Number of milliseconds (ms) from the unlock request was registered until the [`PendingUnlock`] can be redeemed.
+/// * `length_of_redeem_period`: Number of milliseconds (ms) from the [`PendingUnlock`] becomes redeemable until the [`PendingUnlock`] expires.
 /// * `initial_buy_in_percentage`: The initial buy-in percentage used when user submits tokens.
 /// * `liquid_token_name`: The name for the liquid token.  e.g. "LiquidMpcStakingToken".
 /// * `liquid_token_symbol`:  The symbol of the token. E.g. "LMPCST".
@@ -604,6 +637,7 @@ pub fn initialize(
         length_of_redeem_period,
         buy_in_percentage: initial_buy_in_percentage,
         buy_in_enabled: true,
+        pending_unlock_id_counter: INITIAL_PENDING_UNLOCK_ID,
     }
 }
 
@@ -826,6 +860,9 @@ pub fn accrue_rewards(
 
 /// Request unlock of liquid tokens.
 ///
+/// Can be cancelled by user in [`cancel_pending_unlock()`] or by administrator through
+/// [`clean_up_pending_unlocks()`].
+///
 /// # Parameters:
 ///
 ///  * `context`: The contract context containing sender and chain information.
@@ -918,7 +955,7 @@ pub fn deposit_callback(
     state
 }
 
-/// Redeem all liquid tokens from the users pending unlocks that are in the redeem period.
+/// Redeem all liquid tokens from the users [`PendingUnlock`]s that are in the redeem period.
 ///
 /// # Parameters:
 ///
@@ -997,10 +1034,10 @@ pub fn disable_buy_in(
     state
 }
 
-/// Clean up by removing all expired pending unlocks.
-/// If a user does not redeem a pending unlock within the redeem period, then the pending unlock expires.
+/// Clean up by removing all expired [`PendingUnlock`]s.
+/// If a user does not redeem a [`PendingUnlock`] within the redeem period, then the [`PendingUnlock`] expires.
 ///
-/// Only the administrator is allowed to clean up the pending unlocks.
+/// Only the administrator is allowed to clean up the [`PendingUnlock`]s.
 ///
 /// # Parameters:
 ///
@@ -1012,7 +1049,7 @@ pub fn clean_up_pending_unlocks(
     context: ContractContext,
     mut state: LiquidStakingState,
 ) -> LiquidStakingState {
-    if !state.is_allowed_to_clean_pending_unlocks(context.sender) {
+    if !state.is_allowed_to_clean_up_pending_unlocks(context.sender) {
         panic!(
             "Cannot clean up pending unlocks. Only the registered administrator (at address: {}) or staking responsible (at address: {}) can clean up pending unlocks.",
             state.administrator, state.staking_responsible
@@ -1020,5 +1057,22 @@ pub fn clean_up_pending_unlocks(
     }
     state.clean_up_pending_unlocks(context.block_production_time as u64);
 
+    state
+}
+
+/// Cancel a specific [`PendingUnlock`] previously created in [`request_unlock()`]. Users can only cancel their own [`PendingUnlock`]s.
+///
+/// # Parameters:
+///
+///  * `context`: The contract context containing sender and chain information.
+///  * `state`: The current state of the contract.
+///  * `pending_unlock_id`: The identifier of the [`PendingUnlock`].
+#[action(shortname = 0x19)]
+pub fn cancel_pending_unlock(
+    context: ContractContext,
+    mut state: LiquidStakingState,
+    pending_unlock_id: PendingUnlockId,
+) -> LiquidStakingState {
+    state.remove_pending_unlock(context.sender, pending_unlock_id);
     state
 }

@@ -4,6 +4,7 @@ Smart contract which allows token holders to delegate the responsibility
 for staking to a third party (the staking responsible), who has
 a responsibility to select good staking opportunities.
 
+
 ## Usage
 
 Allows a token holder (also called user) to [`submit()`] tokens (e.g. MPC MPC20 tokens) for liquid staking.
@@ -25,6 +26,15 @@ When a pending unlock is registered, the staking responsible has a limited time 
 After the cooldown period, the token holder has a limited time period (called redeem period) in which they can [`redeem()`] their unlocked tokens.
 If the token holder does not redeem the unlocked tokens within the redeem period, then the tokens go back into staking, and the token holder must send a new unlock request.
 
+Token holders can cancel their unlock request, if they later decide to keep their tokens locked.
+
+## Versions
+
+| Version | Upgradable from | Description | State changes |
+| ------: | ---: | ----------- | ---- |
+| 2 | 1 | Add `cancel_pending_unlock` invocation, allowing users to cancel their own unlock requests. | Introduced `PendingUnlockId` on all `PendingUnlock`, and `pending_unlock_id_counter` for assigning them. |
+| 1 | N/A | Initial version. | N/A |
+
 ## Actors and Invocations
 Actors present: The contract owner, the token holder (also called user), the staking responsible, and the administrator.
 These actors have access to distinct sets of invocations on the contract.
@@ -38,6 +48,7 @@ The token holder has access to the following invocations:
 * [`submit()`]
 * [`request_unlock()`]
 * [`redeem()`]
+* [`cancel_pending_unlock()`]
 
 ### Staking Responsible
 The staking responsible is the account that is responsible for delegating the tokens for staking.

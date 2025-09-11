@@ -8,7 +8,7 @@ import com.partisiablockchain.language.codegenlib.BlockchainStateClient;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.Previous;
-import com.partisiablockchain.language.testenvironment.zk.node.TestZkNode;
+import com.partisiablockchain.language.testenvironment.zk.node.RealV1FakeNodes;
 import com.secata.stream.BitInput;
 import com.secata.stream.BitOutput;
 import com.secata.stream.CompactBitArray;
@@ -815,7 +815,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
   /** Get a singular deposit address for the given account. */
   public static DepositBalance getDepositBalance(
-      TestZkNode zkNodes,
+      RealV1FakeNodes zkNodes,
       BlockchainStateClient stateClient,
       BlockchainAddress contractDeposit,
       BlockchainAddress owner) {
@@ -827,7 +827,9 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
   /** Get the full mapping of deposit balances. */
   private static Map<BlockchainAddress, DepositBalance> getDepositBalances(
-      TestZkNode zkNodes, BlockchainStateClient stateClient, BlockchainAddress contractDeposit) {
+      RealV1FakeNodes zkNodes,
+      BlockchainStateClient stateClient,
+      BlockchainAddress contractDeposit) {
     final var state = new ZkDeposit(stateClient, contractDeposit).getState().openState();
 
     final var balances = state.balances().getNextN(null, 10000);
@@ -845,7 +847,7 @@ public abstract class ZkDepositTest extends JunitContractTest {
 
   /** Reads information for the the given account id. */
   public static DepositBalance getVariableDataAsDepositBalance(
-      TestZkNode zkNodes, BlockchainAddress contractDeposit, int variableId) {
+      RealV1FakeNodes zkNodes, BlockchainAddress contractDeposit, int variableId) {
     final var secretVariable = zkNodes.getSecretVariable(contractDeposit, variableId);
 
     final byte[] result = secretVariable.data();
