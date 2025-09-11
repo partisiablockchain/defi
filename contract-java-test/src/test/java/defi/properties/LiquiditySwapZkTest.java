@@ -14,7 +14,7 @@ import com.partisiablockchain.language.junit.ContractTest;
 import com.partisiablockchain.language.junit.JunitContractTest;
 import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
 import com.partisiablockchain.language.junit.exceptions.SecretInputFailureException;
-import com.partisiablockchain.language.testenvironment.zk.node.task.PendingInputId;
+import com.partisiablockchain.language.testenvironment.zk.node.task.VariableId;
 import com.secata.stream.CompactBitArray;
 import java.math.BigInteger;
 import java.util.Map;
@@ -322,7 +322,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     swap(nonOwnerAddress1, contractTokenB, receiving1B, false);
 
     // Confirm all secret inputs.
-    for (PendingInputId peid : zkNodes.getPendingInputs(swapContractAddress)) {
+    for (VariableId peid : zkNodes.getPendingInputs(swapContractAddress)) {
       zkNodes.confirmInput(peid);
     }
 
@@ -359,8 +359,8 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
 
     zkNodes.stop();
 
-    PendingInputId id1 = swap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, true);
-    PendingInputId id2 = swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, false);
+    VariableId id1 = swap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, true);
+    VariableId id2 = swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, false);
     zkNodes.confirmInput(id1);
     zkNodes.confirmInput(id2);
 
@@ -383,9 +383,9 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     zkNodes.stop();
 
     BigInteger receiving1B = calculateReceivingAmount(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A);
-    PendingInputId id1 = swap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, true);
-    PendingInputId id2 = swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, true);
-    PendingInputId id3 = swap(nonOwnerAddress1, contractTokenB, receiving1B, false);
+    VariableId id1 = swap(nonOwnerAddress1, contractTokenA, NON_OWNER_TOKEN_AMOUNT_A, true);
+    VariableId id2 = swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, true);
+    VariableId id3 = swap(nonOwnerAddress1, contractTokenB, receiving1B, false);
     zkNodes.confirmInput(id1);
     zkNodes.confirmInput(id2);
     zkNodes.confirmInput(id3);
@@ -416,13 +416,13 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     zkNodes.stop();
 
     // Queue our swaps.
-    PendingInputId swapId1 =
+    VariableId swapId1 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.valueOf(4)),
             false);
-    PendingInputId swapId2 =
+    VariableId swapId2 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
@@ -473,19 +473,19 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     zkNodes.stop();
 
     // Queue our swaps.
-    PendingInputId swapId1 =
+    VariableId swapId1 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO),
             false);
-    PendingInputId swapId2 =
+    VariableId swapId2 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO),
             false);
-    PendingInputId swapId3 =
+    VariableId swapId3 =
         swap(
             nonOwnerAddress2,
             contractTokenA,
@@ -532,28 +532,27 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
         calculateReceivingAmount(contractTokenA, NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO));
     BigInteger receiving2A =
         calculateReceivingAmount(contractTokenB, NON_OWNER_TOKEN_AMOUNT_B.divide(BigInteger.TWO));
-    PendingInputId swapId1 =
+    VariableId swapId1 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.TWO),
             false);
-    PendingInputId swapId2 =
+    VariableId swapId2 =
         swap(
             nonOwnerAddress2,
             contractTokenB,
             NON_OWNER_TOKEN_AMOUNT_B.divide(BigInteger.TWO),
             false);
-    PendingInputId swapId3 =
+    VariableId swapId3 =
         swap(
             nonOwnerAddress1,
             contractTokenA,
             NON_OWNER_TOKEN_AMOUNT_A.divide(BigInteger.valueOf(4)),
             false);
-    PendingInputId swapId4 = swap(nonOwnerAddress2, contractTokenA, receiving2A, false);
-    PendingInputId swapId5 = swap(nonOwnerAddress1, contractTokenB, receiving1B, false);
-    PendingInputId swapId6 =
-        swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, false);
+    VariableId swapId4 = swap(nonOwnerAddress2, contractTokenA, receiving2A, false);
+    VariableId swapId5 = swap(nonOwnerAddress1, contractTokenB, receiving1B, false);
+    VariableId swapId6 = swap(nonOwnerAddress2, contractTokenB, NON_OWNER_TOKEN_AMOUNT_B, false);
 
     zkNodes.confirmInput(swapId1);
     zkNodes.confirmInput(swapId2);
@@ -676,7 +675,7 @@ public abstract class LiquiditySwapZkTest extends JunitContractTest {
     return builder.getBytes();
   }
 
-  private PendingInputId swap(
+  private VariableId swap(
       BlockchainAddress swapper,
       BlockchainAddress token,
       BigInteger amount,

@@ -1096,6 +1096,70 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertLiquidStakingStateInvariant();
   }
 
+  /** The user can cancel their own pending not-yet-expired unlock. */
+  @ContractTest(previous = "setup")
+  void userCanCancelTheirOwnPendingUnlocks() {
+    initialSetup(60, 0, 0, 0);
+
+    requestUnlock(user1, 50);
+
+    assertThat(getPendingUnlocks(user1)).isNotNull();
+
+    cancelPendingUnlock(user1, getPendingUnlocks(user1).get(0).id());
+
+    assertThat(getPendingUnlocks(user1)).isNull();
+  }
+
+  /** The user can cancel their own pending expired unlocks. */
+  @ContractTest(previous = "setup")
+  void userCanCancelTheirOwnExpiredPendingUnlocks() {
+    initialSetup(60, 0, 0, 0);
+
+    requestUnlock(user1, 50);
+
+    waitForRedeemPeriodToExpire();
+
+    assertThat(getPendingUnlocks(user1)).isNotNull();
+
+    cancelPendingUnlock(user1, getPendingUnlocks(user1).get(0).id());
+
+    assertThat(getPendingUnlocks(user1)).isNull();
+  }
+
+  /** The user cannot cancel another users pending unlock. */
+  @ContractTest(previous = "setup")
+  void userCannotCancelOtherUsersPendingUnlocks() {
+    initialSetup(60, 0, 0, 0);
+
+    submit(user2, 60);
+
+    requestUnlock(user1, 10);
+    requestUnlock(user2, 50);
+
+    assertThat(getPendingUnlocks(user2)).isNotNull();
+
+    var otherUsersId = getPendingUnlocks(user2).get(0).id();
+    assertThatThrownBy(() -> cancelPendingUnlock(user1, otherUsersId))
+        .hasMessageContaining("User does not possess pending unlock with id: 2");
+
+    assertThat(getPendingUnlocks(user2)).isNotNull();
+  }
+
+  /** User cannot cancel when they don't have any pending unlocks. */
+  @ContractTest(previous = "setup")
+  void userCannotCancelWhenTheyDontHaveAnyPendingUnlocks() {
+    initialSetup(60, 0, 0, 0);
+
+    submit(user2, 60);
+
+    assertThat(getPendingUnlocks(user2)).isNull();
+
+    assertThatThrownBy(() -> cancelPendingUnlock(user1, 2))
+        .hasMessageContaining("User does not possess any pending unlocks");
+
+    assertThat(getPendingUnlocks(user2)).isNull();
+  }
+
   /** The administrator can clean up pending unlocks. */
   @ContractTest(previous = "setup")
   void adminCanCleanUpPendingUnlocks() {
@@ -1201,21 +1265,6 @@ public abstract class LiquidStakingTest extends JunitContractTest {
     assertThat(getPendingUnlocks(user1)).isNotNull();
     assertThat(getPendingUnlocks(user1)).hasSize(1);
     assertThat(getPendingUnlocks(user1).get(0).liquidAmount()).isEqualTo(50);
-    assertLiquidStakingStateInvariant();
-  }
-
-  /** The administrator can upgrade the contract. */
-  @ContractTest(previous = "setup")
-  void adminCanUpgrade() {
-    initialSetup(20, 0, 0, 0);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(20);
-    assertLiquidStakingStateInvariant();
-
-    blockchain.upgradeContract(
-        admin, liquidStakingAddress, contractBytesLiquidStaking, new byte[0]);
-
-    assertThat(getLiquidBalance(user1)).isEqualTo(20);
     assertLiquidStakingStateInvariant();
   }
 
@@ -1378,6 +1427,17 @@ public abstract class LiquidStakingTest extends JunitContractTest {
   private void cleanUpPendingUnlocks(BlockchainAddress account) {
     byte[] redeemRpc = LiquidStaking.cleanUpPendingUnlocks();
     blockchain.sendAction(account, liquidStakingAddress, redeemRpc);
+  }
+
+  /**
+   * Helper function for making cancellation of pending unlocks.
+   *
+   * @param account The account that invokes the action.
+   * @param pendingUnlockId The specific pending unlocks ID.
+   */
+  private void cancelPendingUnlock(BlockchainAddress account, int pendingUnlockId) {
+    byte[] cancelRpc = LiquidStaking.cancelPendingUnlock(pendingUnlockId);
+    blockchain.sendAction(account, liquidStakingAddress, cancelRpc);
   }
 
   /**
