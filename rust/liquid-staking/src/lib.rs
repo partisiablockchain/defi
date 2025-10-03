@@ -808,11 +808,13 @@ pub fn withdraw(
         )
     }
     if stake_token_amount == 0 {
-        panic!("Cannot withdraw zero tokens.")
+        panic!("Cannot withdraw {stake_token_amount} tokens.")
     }
     if !state.does_contract_have_enough_stake_tokens(stake_token_amount) {
         panic!(
-            "The staking responsible tried to withdraw more tokens than available on the contract."
+            "The staking responsible tried to withdraw {} tokens, more than available on the contract ({}).",
+            stake_token_amount,
+            state.stake_token_balance
         )
     }
 
