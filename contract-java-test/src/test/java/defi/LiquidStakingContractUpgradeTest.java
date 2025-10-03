@@ -1,14 +1,10 @@
 package defi;
 
-import com.partisiablockchain.BlockchainAddress;
 import com.partisiablockchain.language.abicodegen.LiquidStaking;
-import com.partisiablockchain.language.abicodegen.Token;
-import com.partisiablockchain.language.abicodegen.previous.LiquidStakingV1;
 import com.partisiablockchain.language.junit.ContractBytes;
 import com.partisiablockchain.language.junit.ContractTest;
-import com.partisiablockchain.language.junit.JunitContractTest;
-import java.math.BigInteger;
-import java.nio.file.Path;
+import com.partisiablockchain.language.junit.exceptions.ActionFailureException;
+import defi.properties.LiquidStakingBaseTest;
 import org.assertj.core.api.Assertions;
 
 /**
@@ -17,104 +13,51 @@ import org.assertj.core.api.Assertions;
  * @see LiquidStakingContractTest LiquidStakingContractTest for tests of the upgrade permission
  *     system error cases.
  */
-public final class LiquidStakingContractUpgradeTest extends JunitContractTest {
+public final class LiquidStakingContractUpgradeTest extends LiquidStakingBaseTest {
 
   /** {@link ContractBytes} for the current {@link LiquidStakingContract} contract. */
   static final ContractBytes CONTRACT_BYTES_CURRENT = LiquidStakingContractTest.CONTRACT_BYTES;
 
-  /** {@link ContractBytes} for the current {@link LiquidStakingContract} contract. */
-  static final ContractBytes CONTRACT_BYTES_V1 =
-      ContractBytes.fromPbcFile(
-          Path.of("src/test/resources/defi/previous-versions/liquid_staking_v1.pbc"), null);
-
-  private static final BigInteger USER_STAKE_AMOUNT = BigInteger.valueOf(1_000);
-  private static final BigInteger USER_REQUEST_UNLOCK_AMOUNT = BigInteger.valueOf(100);
-
-  BlockchainAddress administrator;
-  BlockchainAddress user;
-  BlockchainAddress liquidStakingContractAddress;
-  BlockchainAddress tokenContractAddress;
-
-  /** {@link #CONTRACT_BYTES_V1} can be deployed. */
+  /** The current version of the {@link LiquidStaking} contract for testing. */
   @ContractTest
-  public void deployV1() {
-    administrator = blockchain.newAccount(2);
-    user = blockchain.newAccount(3);
-
-    liquidStakingContractAddress =
-        LiquidStakingContractTest.deployAndInitializeLiquidStakingContractWithUnderlyingToken(
-            blockchain,
-            administrator,
-            "Test Token",
-            "TEST",
-            (byte) 0,
-            administrator,
-            BigInteger.valueOf(2_000_000),
-            BigInteger.valueOf(1_000_000),
-            CONTRACT_BYTES_V1);
-
-    setupPendingUnlocks();
+  void setupCurrentVersion() {
+    initializeUsersAndDeployTokenAndLiquidStakingContract(
+        CONTRACT_BYTES_CURRENT, TokenContractTest.CONTRACT_BYTES);
   }
 
-  /**
-   * {@link #CONTRACT_BYTES_V1} can be upgraded to {@link CONTRACT_BYTES_CURRENT} by administrator.
-   */
-  @ContractTest(previous = "deployV1")
-  public void upgradeToV2() {
-    blockchain.upgradeContract(
-        administrator, liquidStakingContractAddress, CONTRACT_BYTES_CURRENT, new byte[0]);
+  /** The staking responsible cannot upgrade the contract. */
+  @ContractTest(previous = "setupCurrentVersion")
+  void stakingResponsibleCannotUpgrade() {
+    initialSetupWithAsserts(20, 0, 0, 0);
 
-    // Ensure that contract was correctly upgraded
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(administrator).get(0).id())
-        .isEqualTo(1);
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(user).get(0).id()).isEqualTo(2);
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(user).get(1).id()).isEqualTo(3);
-    Assertions.assertThat(liquidStakingState().pendingUnlockIdCounter()).isEqualTo(4);
+    Assertions.assertThat(getLiquidBalance(user1)).isEqualTo(20);
+    assertLiquidStakingStateInvariant();
+
+    Assertions.assertThatThrownBy(
+            () ->
+                blockchain.upgradeContract(
+                    stakingResponsible, liquidStakingAddress, CONTRACT_BYTES_CURRENT, new byte[0]))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Contract did not allow this upgrade");
+
+    assertLiquidStakingStateInvariant();
   }
 
-  /** Can cancel upgraded pending unlocks. */
-  @ContractTest(previous = "upgradeToV2")
-  public void canCancelUpgradedPendingUnlocks() {
-    blockchain.sendAction(user, liquidStakingContractAddress, LiquidStaking.cancelPendingUnlock(2));
+  /** A user cannot upgrade the contract. */
+  @ContractTest(previous = "setupCurrentVersion")
+  void userCannotUpgrade() {
+    initialSetupWithAsserts(20, 0, 0, 0);
 
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(user)).hasSize(1);
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(user).get(0).id()).isEqualTo(3);
-    Assertions.assertThat(liquidStakingState().pendingUnlocks().get(administrator)).hasSize(1);
-  }
+    Assertions.assertThat(getLiquidBalance(user1)).isEqualTo(20);
+    assertLiquidStakingStateInvariant();
 
-  private void setupPendingUnlocks() {
-    tokenContractAddress = liquidStakingV1State().tokenForStaking();
+    Assertions.assertThatThrownBy(
+            () ->
+                blockchain.upgradeContract(
+                    user1, liquidStakingAddress, CONTRACT_BYTES_CURRENT, new byte[0]))
+        .isInstanceOf(ActionFailureException.class)
+        .hasMessageContaining("Contract did not allow this upgrade");
 
-    blockchain.sendAction(
-        administrator, tokenContractAddress, Token.transfer(user, USER_STAKE_AMOUNT));
-    blockchain.sendAction(
-        user, tokenContractAddress, Token.approve(liquidStakingContractAddress, USER_STAKE_AMOUNT));
-    blockchain.sendAction(
-        user, liquidStakingContractAddress, LiquidStakingV1.submit(USER_STAKE_AMOUNT));
-
-    blockchain.sendAction(
-        user,
-        liquidStakingContractAddress,
-        LiquidStakingV1.requestUnlock(USER_REQUEST_UNLOCK_AMOUNT));
-    blockchain.sendAction(
-        user,
-        liquidStakingContractAddress,
-        LiquidStakingV1.requestUnlock(USER_REQUEST_UNLOCK_AMOUNT));
-    blockchain.sendAction(
-        administrator,
-        liquidStakingContractAddress,
-        LiquidStakingV1.requestUnlock(USER_REQUEST_UNLOCK_AMOUNT));
-  }
-
-  private LiquidStaking.LiquidStakingState liquidStakingState() {
-    final LiquidStaking liquidStakingContract =
-        new LiquidStaking(getStateClient(), liquidStakingContractAddress);
-    return liquidStakingContract.getState();
-  }
-
-  private LiquidStakingV1.LiquidStakingState liquidStakingV1State() {
-    final LiquidStakingV1 liquidStakingContract =
-        new LiquidStakingV1(getStateClient(), liquidStakingContractAddress);
-    return liquidStakingContract.getState();
+    assertLiquidStakingStateInvariant();
   }
 }

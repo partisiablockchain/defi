@@ -5,7 +5,8 @@
 extern crate pbc_contract_codegen;
 
 use create_type_spec_derive::CreateTypeSpec;
-use pbc_contract_common::address::{Address, AddressType, Shortname};
+use defi_common::interact_mpc20;
+use pbc_contract_common::address::{Address, AddressType};
 use pbc_contract_common::avl_tree_map::AvlTreeMap;
 use pbc_contract_common::context::{CallbackContext, ContractContext};
 use pbc_contract_common::events::EventGroup;
@@ -49,17 +50,6 @@ pub const BIDDING: ContractStatus = 1;
 pub const ENDED: ContractStatus = 2;
 /// Cancelled phase of the contract.
 pub const CANCELLED: ContractStatus = 3;
-
-/// Token contract actions
-#[inline]
-fn token_contract_transfer() -> Shortname {
-    Shortname::from_u32(0x01)
-}
-
-#[inline]
-fn transfer_from() -> Shortname {
-    Shortname::from_u32(0x03)
-}
 
 /// Custom struct for the state of the contract.
 ///
@@ -217,12 +207,12 @@ pub fn start(
 
     event_group.with_callback_rpc(start_callback::rpc()).done();
 
-    event_group
-        .call(state.nft_for_sale_address, transfer_from())
-        .argument(context.sender)
-        .argument(context.contract_address)
-        .argument(state.nft_for_sale_id)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.nft_for_sale_address).transfer_from(
+        &mut event_group,
+        &context.sender,
+        &context.contract_address,
+        state.nft_for_sale_id,
+    );
 
     (state, vec![event_group.build()])
 }
@@ -285,12 +275,12 @@ pub fn bid(
     };
 
     let mut event_group = EventGroup::builder();
-    event_group
-        .call(state.token_for_bidding, transfer_from())
-        .argument(context.sender)
-        .argument(context.contract_address)
-        .argument(bid_amount)
-        .done();
+    interact_mpc20::MPC20Contract::at_address(state.token_for_bidding).transfer_from(
+        &mut event_group,
+        &context.sender,
+        &context.contract_address,
+        bid_amount,
+    );
     event_group.with_callback_rpc(bid_callback::rpc(bid)).done();
     (state, vec![event_group.build()])
 }
@@ -383,19 +373,20 @@ pub fn claim(
         Some(claimable) => {
             let mut event_group = EventGroup::builder();
             if claimable.tokens_for_bidding > 0 {
-                event_group
-                    .call(new_state.token_for_bidding, token_contract_transfer())
-                    .argument(context.sender)
-                    .argument(claimable.tokens_for_bidding)
-                    .done();
+                interact_mpc20::MPC20Contract::at_address(new_state.token_for_bidding).transfer(
+                    &mut event_group,
+                    &context.sender,
+                    claimable.tokens_for_bidding,
+                );
             }
             if claimable.nft_for_sale.is_some() {
-                event_group
-                    .call(new_state.nft_for_sale_address, transfer_from())
-                    .argument(context.contract_address)
-                    .argument(context.sender)
-                    .argument(new_state.nft_for_sale_id)
-                    .done();
+                interact_mpc20::MPC20Contract::at_address(new_state.nft_for_sale_address)
+                    .transfer_from(
+                        &mut event_group,
+                        &context.contract_address,
+                        &context.sender,
+                        new_state.nft_for_sale_id,
+                    );
             }
             new_state.claim_map.insert(
                 context.sender,
